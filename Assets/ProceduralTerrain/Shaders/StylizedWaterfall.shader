@@ -2,10 +2,10 @@ Shader "ProceduralTerrain/StylizedWaterfall"
 {
     Properties
     {
-        _WaterColor ("Water Base Color", Color) = (0.28, 0.82, 0.88, 0.85)
-        _FoamColor ("Foam Color", Color) = (1.0, 1.0, 1.0, 0.95)
-        _ScrollSpeed ("Vertical Flow Speed", Float) = 2.4
-        _FoamDensity ("Foam Density", Float) = 6.0
+        _WaterColor ("Water Base Color", Color) = (0.22, 0.72, 0.90, 0.85)
+        _FoamColor ("Foam Color", Color) = (0.95, 0.98, 1.0, 0.95)
+        _ScrollSpeed ("Vertical Flow Speed", Float) = 1.8
+        _StreakFrequency ("Vertical Streak Count", Float) = 8.0
     }
 
     SubShader
@@ -50,7 +50,7 @@ Shader "ProceduralTerrain/StylizedWaterfall"
                 float4 _WaterColor;
                 float4 _FoamColor;
                 float _ScrollSpeed;
-                float _FoamDensity;
+                float _StreakFrequency;
             CBUFFER_END
 
             Varyings vert(Attributes input)
@@ -69,20 +69,36 @@ Shader "ProceduralTerrain/StylizedWaterfall"
             {
                 float2 uv = input.uv;
 
-                // Scrolling vertical flow
-                float flowY = uv.y - _Time.y * _ScrollSpeed;
+                // Support circular splash foam discs when uv is configured as radial
+                if (input.color.r > 1.5) // flag for splash disc
+                {
+                    float distFromCenter = length(uv - float2(0.5, 0.5)) * 2.0;
+                    if (distFromCenter > 1.0) discard;
+                    float ring = sin(distFromCenter * 12.0 - _Time.y * 3.0) * 0.5 + 0.5;
+                    float alpha = smoothstep(1.0, 0.2, distFromCenter) * (0.6 + 0.4 * ring);
+                    return half4(_FoamColor.rgb, alpha * 0.85);
+                }
 
-                // Procedural vertical streak noise
-                float streak1 = sin(uv.x * _FoamDensity * 3.14 + flowY * 5.0);
-                float streak2 = cos((uv.x + 0.3) * _FoamDensity * 2.5 + flowY * 8.0);
-                float foamPattern = saturate((streak1 + streak2) * 0.5 + 0.4);
+                // Vertical downward flow
+                float flowTime = _Time.y * _ScrollSpeed;
+                float vFlow = uv.y * 2.5 - flowTime;
 
-                // Soft edge fade on sides
-                float edgeFade = 1.0 - pow(abs(uv.x - 0.5) * 2.0, 3.0);
+                // Organic vertical streaks (dominant X variation, subtle Y variation for natural flow)
+                float streak1 = sin(uv.x * _StreakFrequency * 3.14159 + sin(vFlow * 0.8) * 0.6) * 0.5 + 0.5;
+                float streak2 = cos((uv.x + 0.25) * (_StreakFrequency * 1.5) * 3.14159 + vFlow * 0.4) * 0.5 + 0.5;
+                float foamIntensity = saturate(streak1 * 0.6 + streak2 * 0.4);
 
-                // Blend water and foam
-                half4 col = lerp(_WaterColor, _FoamColor, foamPattern);
-                col.a *= edgeFade * input.color.a;
+                // Vertical gradient: clearer at top lip, frothier towards bottom plunge
+                float bottomFroth = smoothstep(0.2, 0.95, uv.y) * 0.45;
+                foamIntensity = saturate(foamIntensity + bottomFroth);
+
+                // Smooth edge fade across ribbon width
+                float edgeDist = abs(uv.x - 0.5) * 2.0;
+                float edgeFade = smoothstep(1.0, 0.65, edgeDist);
+
+                // Blend water and foam smoothly
+                half4 col = lerp(_WaterColor, _FoamColor, foamIntensity * 0.7);
+                col.a = saturate(col.a * edgeFade * input.color.a);
 
                 return col;
             }

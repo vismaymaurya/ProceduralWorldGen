@@ -20,14 +20,28 @@ namespace ProceduralTerrain
         private GUIStyle sliderLabelStyle;
         private bool stylesInitialized = false;
 
+        private string seedInputString = "42";
+        private string toastMessage = "";
+        private float notificationTimer = 0f;
+
         private void Start()
         {
             if (worldManager == null) worldManager = FindFirstObjectByType<ProceduralWorldManager>();
             if (brushTool == null) brushTool = FindFirstObjectByType<TerrainBrushTool>();
+
+            if (worldManager != null)
+            {
+                seedInputString = worldManager.settings.seed.ToString();
+            }
         }
 
         private void Update()
         {
+            if (notificationTimer > 0f)
+            {
+                notificationTimer -= Time.deltaTime;
+            }
+
             // Toggle UI visibility with H key
             if (Input.GetKeyDown(KeyCode.H))
             {
@@ -43,13 +57,36 @@ namespace ProceduralTerrain
                 if (Input.GetKeyDown(KeyCode.Alpha4)) brushTool.currentMode = TerrainBrushMode.SmoothTerrain;
                 if (Input.GetKeyDown(KeyCode.Alpha5)) brushTool.currentMode = TerrainBrushMode.PaintFoliage;
                 if (Input.GetKeyDown(KeyCode.Alpha6)) brushTool.currentMode = TerrainBrushMode.EraseFoliage;
+
+                // [ and ] keys for brush size
+                if (Input.GetKeyDown(KeyCode.LeftBracket))
+                {
+                    brushTool.brushRadius = Mathf.Max(1.5f, brushTool.brushRadius - 1.0f);
+                    ShowToast($"Brush Radius: {brushTool.brushRadius:F1}");
+                }
+                if (Input.GetKeyDown(KeyCode.RightBracket))
+                {
+                    brushTool.brushRadius = Mathf.Min(25.0f, brushTool.brushRadius + 1.0f);
+                    ShowToast($"Brush Radius: {brushTool.brushRadius:F1}");
+                }
             }
 
             // Space to randomize seed & regenerate
             if (Input.GetKeyDown(KeyCode.Space))
             {
-                if (worldManager != null) worldManager.RandomizeSeed();
+                if (worldManager != null)
+                {
+                    worldManager.RandomizeSeed();
+                    seedInputString = worldManager.settings.seed.ToString();
+                    ShowToast($"🎲 New Island Generated! Seed: {worldManager.settings.seed}");
+                }
             }
+        }
+
+        public void ShowToast(string message)
+        {
+            toastMessage = message;
+            notificationTimer = 2.5f;
         }
 
         private void InitStyles()
@@ -121,56 +158,111 @@ namespace ProceduralTerrain
             InitStyles();
 
             DrawTopHeader();
+            DrawBrushSettingsBar();
             DrawBottomToolbar();
+            DrawToast();
+
             if (showSettingsPanel)
             {
                 DrawSettingsPanel();
             }
         }
 
+        private void DrawToast()
+        {
+            if (notificationTimer <= 0f) return;
+            float w = 360;
+            float h = 44;
+            float x = (Screen.width - w) * 0.5f;
+            float y = 90;
+            Rect rect = new Rect(x, y, w, h);
+            GUI.Box(rect, "", panelStyle);
+
+            GUILayout.BeginArea(rect);
+            GUILayout.Space(8);
+            GUILayout.Label(toastMessage, titleStyle);
+            GUILayout.EndArea();
+        }
+
         private void DrawTopHeader()
         {
-            float w = 340;
-            float h = 60;
-            Rect rect = new Rect(20, 20, w, h);
+            float w = Mathf.Min(480, Screen.width - 24);
+            float h = 58;
+            float x = (Screen.width - w) * 0.5f;
+            Rect rect = new Rect(x, 12, w, h);
             GUI.Box(rect, "", panelStyle);
 
             GUILayout.BeginArea(rect);
             GUILayout.Space(6);
             GUILayout.Label("Fairytale Island Generator", titleStyle);
-            GUILayout.Label("Right-Drag: Orbit | WASD: Pan | Scroll: Zoom | Space: New Island", sliderLabelStyle);
+            GUILayout.Label("Right-Drag: Orbit | WASD: Pan | Scroll: Zoom | [ / ]: Brush Size | Space: New Island", sliderLabelStyle);
+            GUILayout.EndArea();
+        }
+
+        private void DrawBrushSettingsBar()
+        {
+            if (brushTool == null) return;
+
+            float w = Mathf.Min(560, Screen.width - 20);
+            float h = 42;
+            float x = (Screen.width - w) * 0.5f;
+            float y = Screen.height - 74 - 14 - h - 6;
+
+            Rect rect = new Rect(x, y, w, h);
+            GUI.Box(rect, "", panelStyle);
+
+            GUILayout.BeginArea(rect);
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(4);
+
+            string modeName = brushTool.currentMode.ToString().Replace("Raise", "").Replace("Lower", "").Replace("Flatten", "").Replace("Smooth", "Smooth ").Replace("Paint", "Paint ").Replace("Erase", "Erase ");
+            GUILayout.Label($"<b>Tool:</b> {modeName}", labelStyle, GUILayout.Width(110));
+
+            GUILayout.Label($"Size: {brushTool.brushRadius:F1}", sliderLabelStyle, GUILayout.Width(62));
+            brushTool.brushRadius = GUILayout.HorizontalSlider(brushTool.brushRadius, 1.5f, 20.0f, GUILayout.Width(130));
+
+            GUILayout.Space(10);
+            GUILayout.Label($"Power: {brushTool.brushStrength:F1}", sliderLabelStyle, GUILayout.Width(68));
+            brushTool.brushStrength = GUILayout.HorizontalSlider(brushTool.brushStrength, 0.2f, 3.5f, GUILayout.Width(130));
+
+            GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
 
         private void DrawBottomToolbar()
         {
             float screenW = Screen.width;
-            float barW = 720;
+            float barW = Mathf.Min(740, screenW - 20);
             float barH = 74;
             float x = (screenW - barW) * 0.5f;
-            float y = Screen.height - barH - 18;
+            float y = Screen.height - barH - 14;
 
             Rect rect = new Rect(x, y, barW, barH);
             GUI.Box(rect, "", panelStyle);
 
             GUILayout.BeginArea(rect);
             GUILayout.BeginHorizontal();
-            GUILayout.Space(8);
+            GUILayout.Space(6);
 
             // Brush Tools
-            DrawBrushButton("1 Mountain", TerrainBrushMode.RaiseMountain, 92);
+            DrawBrushButton("1 Mountain", TerrainBrushMode.RaiseMountain, 90);
             DrawBrushButton("2 River", TerrainBrushMode.LowerRiver, 82);
             DrawBrushButton("3 Plateau", TerrainBrushMode.FlattenPlateau, 85);
-            DrawBrushButton("4 Smooth", TerrainBrushMode.SmoothTerrain, 82);
-            DrawBrushButton("5 Foliage", TerrainBrushMode.PaintFoliage, 82);
-            DrawBrushButton("6 Erase", TerrainBrushMode.EraseFoliage, 75);
+            DrawBrushButton("4 Smooth", TerrainBrushMode.SmoothTerrain, 80);
+            DrawBrushButton("5 Foliage", TerrainBrushMode.PaintFoliage, 80);
+            DrawBrushButton("6 Erase", TerrainBrushMode.EraseFoliage, 72);
 
-            GUILayout.Space(12);
+            GUILayout.Space(10);
 
             // Randomize Seed & Settings
-            if (GUILayout.Button("🎲 New Island", buttonNormalStyle, GUILayout.Width(100), GUILayout.Height(48)))
+            if (GUILayout.Button("🎲 New Island", buttonActiveStyle, GUILayout.Width(110), GUILayout.Height(48)))
             {
-                if (worldManager != null) worldManager.RandomizeSeed();
+                if (worldManager != null)
+                {
+                    worldManager.RandomizeSeed();
+                    seedInputString = worldManager.settings.seed.ToString();
+                    ShowToast($"🎲 New Island Generated! Seed: {worldManager.settings.seed}");
+                }
             }
 
             string toggleText = showSettingsPanel ? "⚙ Close" : "⚙ Settings";
@@ -199,37 +291,76 @@ namespace ProceduralTerrain
             if (worldManager == null) return;
             var settings = worldManager.settings;
 
-            float w = 310;
-            float h = 420;
+            float w = 330;
+            float h = 570;
             float x = Screen.width - w - 20;
-            float y = Screen.height - h - 100;
+            float y = Mathf.Max(20, Screen.height - h - 130);
 
             Rect rect = new Rect(x, y, w, h);
             GUI.Box(rect, "", panelStyle);
 
             GUILayout.BeginArea(rect);
             GUILayout.Space(4);
-            GUILayout.Label("Terrain Settings", titleStyle);
+            GUILayout.Label("Terrain & River Settings", titleStyle);
             GUILayout.Space(6);
 
-            GUILayout.Label($"Seed: {settings.seed}", labelStyle);
-            if (GUILayout.Button("Generate with Seed", buttonNormalStyle, GUILayout.Height(26)))
+            // 1. One-click Random Island generation
+            if (GUILayout.Button("🎲 Generate Random Island", buttonActiveStyle, GUILayout.Height(34)))
             {
-                worldManager.GenerateWorld();
+                worldManager.RandomizeSeed();
+                seedInputString = worldManager.settings.seed.ToString();
+                ShowToast($"🎲 Random Island Generated! Seed: {worldManager.settings.seed}");
             }
 
-            GUILayout.Space(8);
-            GUILayout.Label($"Island Radius: {settings.islandRadius:F2}", sliderLabelStyle);
-            settings.islandRadius = GUILayout.HorizontalSlider(settings.islandRadius, 0.35f, 0.88f);
+            GUILayout.Space(6);
+            GUILayout.Label($"Island Seed: {settings.seed}", labelStyle);
+            GUILayout.BeginHorizontal();
+            seedInputString = GUILayout.TextField(seedInputString, GUILayout.Width(140), GUILayout.Height(26));
+            if (GUILayout.Button("Apply", buttonNormalStyle, GUILayout.Width(62), GUILayout.Height(26)))
+            {
+                if (int.TryParse(seedInputString, out int parsed))
+                {
+                    settings.seed = parsed;
+                    worldManager.GenerateWorld();
+                    ShowToast($"Island Seed Set: {settings.seed}");
+                }
+            }
+            if (GUILayout.Button("🎲 Roll", buttonNormalStyle, GUILayout.Width(58), GUILayout.Height(26)))
+            {
+                worldManager.RandomizeSeed();
+                seedInputString = settings.seed.ToString();
+                ShowToast($"New Seed Rolled: {settings.seed}");
+            }
+            GUILayout.EndHorizontal();
 
-            GUILayout.Label($"Mountain Height: {settings.maxHeight:F0}", sliderLabelStyle);
-            settings.maxHeight = GUILayout.HorizontalSlider(settings.maxHeight, 12f, 45f);
+            if (worldManager.CustomRiverPaths.Count > 0)
+            {
+                GUILayout.Space(4);
+                if (GUILayout.Button("🌊 Clear Custom Rivers", buttonNormalStyle, GUILayout.Height(24)))
+                {
+                    worldManager.ClearCustomRivers();
+                    ShowToast("Custom Rivers Cleared");
+                }
+            }
 
-            GUILayout.Label($"Water Level: {settings.waterLevel:F1}", sliderLabelStyle);
+            GUILayout.Space(6);
+            GUILayout.Label($"Terrain Height: {settings.maxHeight:F0}m", sliderLabelStyle);
+            settings.maxHeight = GUILayout.HorizontalSlider(settings.maxHeight, 10f, 50f);
+
+            GUILayout.Label($"River Depth: {settings.riverDepth:F2} (Shallow Channel)", sliderLabelStyle);
+            settings.riverDepth = GUILayout.HorizontalSlider(settings.riverDepth, 0.1f, 1.8f);
+
+            GUILayout.Label($"River Width: {settings.riverWidth:F1} units", sliderLabelStyle);
+            settings.riverWidth = GUILayout.HorizontalSlider(settings.riverWidth, 1.5f, 6.0f);
+
+            GUILayout.Label($"Water Level: {settings.waterLevel:F1}m", sliderLabelStyle);
             settings.waterLevel = GUILayout.HorizontalSlider(settings.waterLevel, 1.5f, 7.0f);
 
             GUILayout.Label($"River Count: {settings.riverCount}", sliderLabelStyle);
             settings.riverCount = Mathf.RoundToInt(GUILayout.HorizontalSlider(settings.riverCount, 0, 6));
+
+            GUILayout.Label($"Island Radius: {settings.islandRadius:F2}", sliderLabelStyle);
+            settings.islandRadius = GUILayout.HorizontalSlider(settings.islandRadius, 0.35f, 0.88f);
 
             GUILayout.Label($"Coastline Warping: {settings.coastlineWarpStrength:F1}", sliderLabelStyle);
             settings.coastlineWarpStrength = GUILayout.HorizontalSlider(settings.coastlineWarpStrength, 0f, 25f);
@@ -241,10 +372,11 @@ namespace ProceduralTerrain
                 worldManager.RebuildMesh();
             }
 
-            GUILayout.Space(10);
-            if (GUILayout.Button("Re-generate Mesh", buttonNormalStyle, GUILayout.Height(30)))
+            GUILayout.Space(8);
+            if (GUILayout.Button("🔄 Re-generate Island", buttonNormalStyle, GUILayout.Height(30)))
             {
                 worldManager.GenerateWorld();
+                ShowToast($"Island Re-generated! Seed: {settings.seed}");
             }
 
             GUILayout.EndArea();

@@ -23,5 +23,30 @@
    - Bottom diorama toolbar and settings dock.
    - Diorama orbit, pan, and zoom camera controller.
 7. **Critical Memory Optimization**: Fixed native C++ `VertexData` out-of-memory crash through in-place buffer reuse, dynamic mesh marking, deferred PhysX baking on mouse release, and `HideFlags.DontSave`.
+8. **Elevated River Water Geometry**: Procedurally generated and user-painted rivers now feature 3D water ribbons with depth gradient and shoreline foam from mountain source to ocean mouth.
+9. **Multi-Step Waterfall & Ocean Cliff Cascade**: Relaxed steepness threshold across a 2-3 step window (>= 1.0 unit drop over ~21° slope) and sea cliffs, guaranteeing dramatic cascading waterfalls.
+10. **Interactive River Brush Overhaul**: Carves a clean U-channel into the mountain without erasing terrain, painting live glowing blue water streams under the brush.
+11. **Seed Generation & Randomization Overhaul**: Added editable seed input field, instant `🎲 Roll` button in Settings, and animated Toast feedback banners.
+12. **Aesthetic Overhaul of Rivers & Waterfalls [2026-10-17 19:45:00 +05:30]**:
+    - Eliminated diagonal zebra striping in `StylizedWaterfall.shader` with smooth vertical flowing water streams and edge fades.
+    - Eliminated floating "ski-jump" quads and excessive waterfalls by restricting waterfall generation to true steep cliffs ($>42^\circ$ slope, drop $\ge 2.0$) and ocean cliffs.
+    - Implemented bilinear height sampling so rivers sit snugly in carved channels without hovering in the air.
+    - Replaced square splash plates with circular radial foam ripple discs.
+    - Added one-click `🎲 Generate Random Island` button to instantly roll a random seed.
+13. **Seed Diversity, Non-Erasing River Brush & Full UI Sliders [2026-10-17 20:25:00 +05:30]**:
+    - Solved identical seed shapes with seed-based macro spatial offsets (`[-4000, 4000]`) and dynamic mountain center shifts.
+    - Added `forceFullClear` mesh topology refresh on seed regeneration so the new island renders immediately.
+    - Converted river brush into non-erasing path tool with gentle shallow bed indentation (`0.25 units`) on release and tight terrain hugging (`+8cm`), preventing mid-air floating.
+    - Restricted waterfalls to steep cliff drops ($> 50^\circ$ to $60^\circ$ slope, drop $\ge 2.2$ units).
+    - Added on-screen Brush Size / Strength dock and full Settings Panel sliders for Terrain Height, River Depth, River Width, and Water Level.
+14. **Resolution of "Empty World" & Guaranteed Mountains [2026-10-17 21:05:00 +05:30]**:
+    - Solved the empty world bug where seeds generated flat, featureless table lands with 0 mountains and barely 12 trees.
+    - Implemented multi-tier landscape generation with guaranteed mountain spines (peaks reaching 26m–39m on every seed), rolling hills (10m–16m), and lush lowland plains (5.8m–9.5m).
+    - Added `SanitizeSettings()` to safeguard against stale scene data and ensure `baseHeight >= 5.8f` above water level (`4.0f`).
+    - Fixed mesh topology update logic in `IslandMeshGenerator` when `forceFullClear` is called.
+    - Upgraded tree spawner to populate mountain slopes with pines and valley meadows with oaks, blossoms, rocks, and wildflowers (120–250+ trees per island).
+15. **Resolution of Non-Finite (NaN) Collision Mesh Errors [2026-10-17 21:15:00 +05:30]**:
+    - Fixed `Mathf.Pow(nRidge, 1.4f)` producing `NaN` when noise slightly exceeded 1.0, which broke PhysX collision mesh baking, rock positions, and river mesh bounds.
+    - Clamped `nRidge` with `Mathf.Clamp01` and added defensive finiteness guards across `ProceduralWorldManager`, `IslandMeshGenerator`, `ProceduralWater`, and `ProceduralFoliage`.
 
-For full documentation and instructions, please see [HowToUse.md](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/HowToUse.md).
+For full documentation and instructions, please see [DailyProgressReport.md](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/DailyProgressReport.md) and [HowToUse.md](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/HowToUse.md).

@@ -14,6 +14,12 @@ namespace ProceduralTerrain
         private Mesh waterPlaneMesh;
         private List<GameObject> waterfallObjects = new List<GameObject>();
         private List<Mesh> waterfallMeshes = new List<Mesh>();
+        private List<GameObject> riverObjects = new List<GameObject>();
+        private List<Mesh> riverMeshes = new List<Mesh>();
+
+        // Real-time river brush stroke preview
+        private GameObject dynamicRiverObj;
+        private Mesh dynamicRiverMesh;
 
         private void OnDestroy()
         {
@@ -28,7 +34,10 @@ namespace ProceduralTerrain
             }
         }
 
-        public void BuildWater(TerrainGenerationSettings settings, List<WaterfallPoint> waterfalls)
+        public void BuildWater(
+            TerrainGenerationSettings settings,
+            List<WaterfallPoint> waterfalls,
+            List<List<Vector3>> riverPaths = null)
         {
             ClearWater();
 
@@ -49,12 +58,20 @@ namespace ProceduralTerrain
                 mr.sharedMaterial = waterMaterial;
             }
 
-            // 2. Build Waterfall meshes
+            // 2. Build River water meshes (mountain to sea ribbons)
+            if (riverPaths != null && riverPaths.Count > 0)
+            {
+                BuildRivers(riverPaths, settings);
+            }
+
+            // 3. Build Waterfall meshes
             BuildWaterfalls(waterfalls);
         }
 
         public void ClearWater()
         {
+            ClearDynamicRiverStroke();
+
             if (waterPlaneMesh != null)
             {
                 SafeDestroyMesh(waterPlaneMesh);
@@ -84,7 +101,209 @@ namespace ProceduralTerrain
                 }
             }
             waterfallObjects.Clear();
+
+            for (int i = 0; i < riverMeshes.Count; i++)
+            {
+                if (riverMeshes[i] != null)
+                {
+                    SafeDestroyMesh(riverMeshes[i]);
+                }
+            }
+            riverMeshes.Clear();
+
+            for (int i = 0; i < riverObjects.Count; i++)
+            {
+                if (riverObjects[i] != null)
+                {
+                    SafeDestroyGO(riverObjects[i]);
+                }
+            }
+            riverObjects.Clear();
         }
+
+        private void BuildRivers(List<List<Vector3>> riverPaths, TerrainGenerationSettings settings)
+        {
+            for (int i = 0; i < riverPaths.Count; i++)
+            {
+                List<Vector3> path = riverPaths[i];
+                if (path == null || path.Count < 2) continue;
+
+                GameObject riverObj = new GameObject($"River_{i}");
+                riverObj.transform.SetParent(transform, false);
+
+                MeshFilter mf = riverObj.AddComponent<MeshFilter>();
+                MeshRenderer mr = riverObj.AddComponent<MeshRenderer>();
+
+                Mesh riverMesh = GenerateRiverMesh(path, settings, $"RiverMesh_{i}");
+                riverMeshes.Add(riverMesh);
+                mf.sharedMesh = riverMesh;
+
+                mr.sharedMaterial = waterMaterial != null ? waterMaterial : waterfallMaterial;
+                riverObjects.Add(riverObj);
+            }
+        }
+
+        public Mesh GenerateRiverMesh(List<Vector3> path, TerrainGenerationSettings settings, string meshName = "RiverWaterMesh")
+        {
+            Mesh mesh = new Mesh
+            {
+                name = meshName,
+                hideFlags = HideFlags.DontSave
+            };
+
+            int count = path.Count;
+            int vertCount = count * 3;
+            int triCount = (count - 1) * 12;
+
+            Vector3[] verts = new Vector3[vertCount];
+            Vector2[] uvs = new Vector2[vertCount];
+            Vector3[] normals = new Vector3[vertCount];
+            Color[] colors = new Color[vertCount];
+            int[] tris = new int[triCount];
+
+            float vCoord = 0f;
+            Color bankColor = new Color(0.9f, 0.98f, 1.0f, 0.35f);
+            Color centerColor = new Color(0.24f, 0.76f, 0.92f, 0.88f);
+
+            for (int i = 0; i < count; i++)
+            {
+                Vector3 current = path[i];
+
+                Vector3 tangent;
+                if (i == 0)
+                    tangent = (path[1] - path[0]).normalized;
+                else if (i == count - 1)
+                    tangent = (path[count - 1] - path[count - 2]).normalized;
+                else
+                    tangent = (path[i + 1] - path[i - 1]).normalized;
+
+                Vector3 side = Vector3.Cross(Vector3.up, tangent).normalized;
+                if (side.sqrMagnitude < 0.001f) side = Vector3.right;
+
+                // River sits smoothly in channel
+                float width = settings.riverWidth * 0.78f;
+                float halfW = width * 0.5f;
+
+                int iLeft = i * 3;
+                int iCenter = i * 3 + 1;
+                int iRight = i * 3 + 2;
+
+                verts[iLeft] = current - side * halfW;
+                verts[iCenter] = current + Vector3.up * 0.02f; // subtle 0.02f camber
+                verts[iRight] = current + side * halfW;
+
+                uvs[iLeft] = new Vector2(0f, vCoord);
+                uvs[iCenter] = new Vector2(0.5f, vCoord);
+                uvs[iRight] = new Vector2(1f, vCoord);
+
+                normals[iLeft] = Vector3.up;
+                normals[iCenter] = Vector3.up;
+                normals[iRight] = Vector3.up;
+
+                colors[iLeft] = bankColor;
+                colors[iCenter] = centerColor;
+                colors[iRight] = bankColor;
+
+                if (i < count - 1)
+                {
+                    vCoord += Vector3.Distance(current, path[i + 1]) * 0.18f;
+                }
+            }
+
+            int t = 0;
+            for (int i = 0; i < count - 1; i++)
+            {
+                int c0 = i * 3;
+                int c1 = i * 3 + 1;
+                int c2 = i * 3 + 2;
+
+                int n0 = (i + 1) * 3;
+                int n1 = (i + 1) * 3 + 1;
+                int n2 = (i + 1) * 3 + 2;
+
+                // Left Quad
+                tris[t++] = c0;
+                tris[t++] = n0;
+                tris[t++] = c1;
+
+                tris[t++] = c1;
+                tris[t++] = n0;
+                tris[t++] = n1;
+
+                // Right Quad
+                tris[t++] = c1;
+                tris[t++] = n1;
+                tris[t++] = c2;
+
+                tris[t++] = c2;
+                tris[t++] = n1;
+                tris[t++] = n2;
+            }
+
+            for (int i = 0; i < vertCount; i++)
+            {
+                if (float.IsNaN(verts[i].x) || float.IsNaN(verts[i].y) || float.IsNaN(verts[i].z) ||
+                    float.IsInfinity(verts[i].x) || float.IsInfinity(verts[i].y) || float.IsInfinity(verts[i].z))
+                {
+                    verts[i] = Vector3.zero;
+                }
+            }
+
+            mesh.vertices = verts;
+            mesh.uv = uvs;
+            mesh.normals = normals;
+            mesh.colors = colors;
+            mesh.triangles = tris;
+            mesh.RecalculateBounds();
+
+            return mesh;
+        }
+
+        // ================= DYNAMIC RIVER STROKE (LIVE BRUSH PAINTING) =================
+
+        public void UpdateDynamicRiverStroke(List<Vector3> strokePoints, TerrainGenerationSettings settings)
+        {
+            if (strokePoints == null || strokePoints.Count < 2)
+            {
+                if (dynamicRiverObj != null) dynamicRiverObj.SetActive(false);
+                return;
+            }
+
+            if (dynamicRiverObj == null)
+            {
+                dynamicRiverObj = new GameObject("DynamicRiverStroke");
+                dynamicRiverObj.transform.SetParent(transform, false);
+                dynamicRiverObj.AddComponent<MeshFilter>();
+                MeshRenderer mr = dynamicRiverObj.AddComponent<MeshRenderer>();
+                mr.sharedMaterial = waterMaterial;
+            }
+
+            dynamicRiverObj.SetActive(true);
+            MeshFilter mf = dynamicRiverObj.GetComponent<MeshFilter>();
+            if (dynamicRiverMesh != null)
+            {
+                SafeDestroyMesh(dynamicRiverMesh);
+                dynamicRiverMesh = null;
+            }
+
+            dynamicRiverMesh = GenerateRiverMesh(strokePoints, settings, "DynamicRiverMesh");
+            mf.sharedMesh = dynamicRiverMesh;
+        }
+
+        public void ClearDynamicRiverStroke()
+        {
+            if (dynamicRiverObj != null)
+            {
+                dynamicRiverObj.SetActive(false);
+                if (dynamicRiverMesh != null)
+                {
+                    SafeDestroyMesh(dynamicRiverMesh);
+                    dynamicRiverMesh = null;
+                }
+            }
+        }
+
+        // ================= WATER SURFACE & WATERFALLS =================
 
         private Mesh CreateWaterPlaneMesh(float size, int segments)
         {
@@ -165,16 +384,32 @@ namespace ProceduralTerrain
                     mr.sharedMaterial = waterfallMaterial;
                 }
 
-                // Add subtle foam splash quad at base
+                // Add circular foaming splash ring at plunge pool base
                 GameObject splashObj = GameObject.CreatePrimitive(PrimitiveType.Quad);
                 splashObj.name = "SplashFoam";
                 splashObj.transform.SetParent(wfObj.transform, false);
-                splashObj.transform.position = wp.endPosition + Vector3.up * 0.08f;
+                splashObj.transform.position = wp.endPosition + Vector3.up * 0.04f;
                 splashObj.transform.rotation = Quaternion.Euler(90, 0, 0);
-                splashObj.transform.localScale = new Vector3(wp.width * 1.6f, wp.width * 1.6f, 1f);
+                splashObj.transform.localScale = Vector3.one * (wp.width * 1.8f);
 
                 Collider c = splashObj.GetComponent<Collider>();
                 if (c != null) DestroyImmediate(c);
+
+                MeshFilter smf = splashObj.GetComponent<MeshFilter>();
+                if (smf != null && smf.sharedMesh != null)
+                {
+                    Mesh sm = Object.Instantiate(smf.sharedMesh);
+                    sm.hideFlags = HideFlags.DontSave;
+                    Color[] radialColors = new Color[sm.vertexCount];
+                    for (int k = 0; k < radialColors.Length; k++)
+                    {
+                        // Color.r > 1.5 flags the shader to draw the circular splash ripple
+                        radialColors[k] = new Color(2.0f, 1f, 1f, 0.85f);
+                    }
+                    sm.colors = radialColors;
+                    smf.sharedMesh = sm;
+                    waterfallMeshes.Add(sm);
+                }
 
                 MeshRenderer smr = splashObj.GetComponent<MeshRenderer>();
                 if (waterfallMaterial != null)
@@ -207,7 +442,8 @@ namespace ProceduralTerrain
                 float t = (float)s / segments;
 
                 Vector3 center = Vector3.Lerp(wp.startPosition, wp.endPosition, t);
-                center += wp.flowDirection * Mathf.Sin(t * Mathf.PI) * 0.4f;
+                // Subtle 0.08f arc to drape naturally down the cliff face without jump ramps
+                center += wp.flowDirection * Mathf.Sin(t * Mathf.PI) * 0.08f;
 
                 int iLeft = s * 2;
                 int iRight = s * 2 + 1;
@@ -215,10 +451,10 @@ namespace ProceduralTerrain
                 verts[iLeft] = center - side;
                 verts[iRight] = center + side;
 
-                uvs[iLeft] = new Vector2(0, t * 3f);
-                uvs[iRight] = new Vector2(1, t * 3f);
+                uvs[iLeft] = new Vector2(0, t * 2f);
+                uvs[iRight] = new Vector2(1, t * 2f);
 
-                float alpha = (s == 0 || s == segments) ? 0.3f : 0.95f;
+                float alpha = (s == 0) ? 0.4f : ((s == segments) ? 0.95f : 0.85f);
                 colors[iLeft] = new Color(1, 1, 1, alpha);
                 colors[iRight] = new Color(1, 1, 1, alpha);
             }

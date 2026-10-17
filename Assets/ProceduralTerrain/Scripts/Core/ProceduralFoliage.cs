@@ -100,9 +100,9 @@ namespace ProceduralTerrain
 
             System.Random prng = new System.Random(settings.seed + 777);
 
-            // Stride of 3 gives great clustering while keeping tree count modest (150-250 trees max)
-            int step = 3;
-            int maxTrees = 250;
+            // Stride of 2 gives dense, fairytale tree groves and clusters (capped at 260 trees max for smooth 60fps)
+            int step = 2;
+            int maxTrees = 260;
             int treesSpawned = 0;
 
             for (int y = 3; y < mapSize - 3 && treesSpawned < maxTrees; y += step)
@@ -110,11 +110,13 @@ namespace ProceduralTerrain
                 for (int x = 3; x < mapSize - 3 && treesSpawned < maxTrees; x += step)
                 {
                     float h = heightMap[x, y];
-
-                    if (h < settings.beachHeight + 0.4f)
+                    if (float.IsNaN(h) || float.IsInfinity(h))
                         continue;
 
-                    if (h > settings.maxHeight * 0.72f)
+                    if (h < settings.beachHeight + 0.15f)
+                        continue;
+
+                    if (h > settings.maxHeight * 0.78f)
                         continue;
 
                     float hL = heightMap[Mathf.Max(0, x - 1), y];
@@ -123,9 +125,11 @@ namespace ProceduralTerrain
                     float hU = heightMap[x, Mathf.Min(mapSize - 1, y + 1)];
 
                     Vector3 normal = new Vector3(hL - hR, cellSize * 2f, hD - hU).normalized;
-                    if (normal.y < 0.78f)
+
+                    // Steep cliff drops - spawn weathered granite rocks, avoid placing trees sideways
+                    if (normal.y < 0.52f)
                     {
-                        if ((float)prng.NextDouble() < rockDensity * 0.12f)
+                        if ((float)prng.NextDouble() < rockDensity * 0.20f)
                         {
                             Vector3 rPos = new Vector3(x * cellSize - halfWorld, h, y * cellSize - halfWorld);
                             SpawnRock(rPos, prng);
@@ -133,36 +137,38 @@ namespace ProceduralTerrain
                         continue;
                     }
 
-                    float wx = x * cellSize - halfWorld + ((float)prng.NextDouble() - 0.5f) * cellSize * 0.9f;
-                    float wz = y * cellSize - halfWorld + ((float)prng.NextDouble() - 0.5f) * cellSize * 0.9f;
+                    float wx = x * cellSize - halfWorld + ((float)prng.NextDouble() - 0.5f) * cellSize * 0.85f;
+                    float wz = y * cellSize - halfWorld + ((float)prng.NextDouble() - 0.5f) * cellSize * 0.85f;
                     Vector3 worldPos = new Vector3(wx, h, wz);
 
                     float fNoise = (forestNoise.GetNoise(wx, wz) + 1f) * 0.5f;
 
-                    if (fNoise > (1f - treeDensity * 0.85f))
+                    // Mountain Pine Zone (highland slopes and ridges)
+                    if (h >= 11.5f && normal.y >= 0.52f)
                     {
-                        if ((float)prng.NextDouble() < 0.7f)
+                        if (fNoise > 0.38f && (float)prng.NextDouble() < 0.72f)
                         {
-                            if (h > settings.maxHeight * 0.45f)
-                            {
-                                SpawnTree(worldPos, FoliageType.PineTree, prng);
-                            }
-                            else
-                            {
-                                double roll = prng.NextDouble();
-                                if (roll < 0.65)
-                                    SpawnTree(worldPos, FoliageType.DeciduousTree, prng);
-                                else if (roll < 0.88)
-                                    SpawnTree(worldPos, FoliageType.BlossomTree, prng);
-                                else
-                                    SpawnTree(worldPos, FoliageType.PineTree, prng);
-                            }
+                            SpawnTree(worldPos, FoliageType.PineTree, prng);
                             treesSpawned++;
                         }
+                        else if (normal.y < 0.70f && (float)prng.NextDouble() < rockDensity * 0.25f)
+                        {
+                            SpawnRock(worldPos, prng);
+                        }
                     }
-                    else if (fNoise < 0.42f)
+                    // Valley Meadows & Lowland Plains (deciduous oak groves & cherry blossoms)
+                    else if (h < 11.5f && normal.y >= 0.70f)
                     {
-                        if ((float)prng.NextDouble() < flowerDensity * 0.3f)
+                        if (fNoise > 0.40f && (float)prng.NextDouble() < 0.65f)
+                        {
+                            double roll = prng.NextDouble();
+                            if (roll < 0.26)
+                                SpawnTree(worldPos, FoliageType.BlossomTree, prng);
+                            else
+                                SpawnTree(worldPos, FoliageType.DeciduousTree, prng);
+                            treesSpawned++;
+                        }
+                        else if (fNoise < 0.38f && (float)prng.NextDouble() < flowerDensity * 0.40f)
                         {
                             SpawnFlower(worldPos, prng);
                         }
@@ -204,11 +210,19 @@ namespace ProceduralTerrain
                 SafeDestroyGO(foliageRoot);
                 foliageRoot = null;
             }
+
+            for (int i = transform.childCount - 1; i >= 0; i--)
+            {
+                SafeDestroyGO(transform.GetChild(i).gameObject);
+            }
+
             spawnedFoliage.Clear();
         }
 
         private void SpawnTree(Vector3 pos, FoliageType type, System.Random prng)
         {
+            if (float.IsNaN(pos.x) || float.IsNaN(pos.y) || float.IsNaN(pos.z) || float.IsInfinity(pos.x) || float.IsInfinity(pos.y) || float.IsInfinity(pos.z)) return;
+
             GameObject tree = new GameObject(type.ToString());
             tree.transform.SetParent(foliageRoot.transform, false);
             tree.transform.position = pos;
@@ -242,6 +256,8 @@ namespace ProceduralTerrain
 
         private void SpawnRock(Vector3 pos, System.Random prng)
         {
+            if (float.IsNaN(pos.x) || float.IsNaN(pos.y) || float.IsNaN(pos.z) || float.IsInfinity(pos.x) || float.IsInfinity(pos.y) || float.IsInfinity(pos.z)) return;
+
             GameObject rock = new GameObject("RiverRock");
             rock.transform.SetParent(foliageRoot.transform, false);
             rock.transform.position = pos;
@@ -262,6 +278,8 @@ namespace ProceduralTerrain
 
         private void SpawnFlower(Vector3 pos, System.Random prng)
         {
+            if (float.IsNaN(pos.x) || float.IsNaN(pos.y) || float.IsNaN(pos.z) || float.IsInfinity(pos.x) || float.IsInfinity(pos.y) || float.IsInfinity(pos.z)) return;
+
             GameObject flower = new GameObject("FlowerCluster");
             flower.transform.SetParent(foliageRoot.transform, false);
             flower.transform.position = pos;

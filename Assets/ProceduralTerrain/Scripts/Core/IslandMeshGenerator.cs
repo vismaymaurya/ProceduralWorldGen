@@ -26,7 +26,7 @@ namespace ProceduralTerrain
             this.cellSize = worldSize / (mapSize - 1);
         }
 
-        public Mesh GenerateOrUpdateMesh(Mesh targetMesh = null)
+        public Mesh GenerateOrUpdateMesh(Mesh targetMesh = null, bool forceFullClear = false)
         {
             if (targetMesh == null)
             {
@@ -36,22 +36,28 @@ namespace ProceduralTerrain
                     hideFlags = HideFlags.DontSave
                 };
                 targetMesh.MarkDynamic();
+                forceFullClear = true;
+            }
+
+            if (forceFullClear)
+            {
+                targetMesh.Clear();
             }
 
             if (settings.flatShaded)
             {
-                GenerateFlatShadedMesh(targetMesh);
+                GenerateFlatShadedMesh(targetMesh, forceFullClear);
             }
             else
             {
-                GenerateSmoothMesh(targetMesh);
+                GenerateSmoothMesh(targetMesh, forceFullClear);
             }
 
             targetMesh.RecalculateBounds();
             return targetMesh;
         }
 
-        private void GenerateFlatShadedMesh(Mesh mesh)
+        private void GenerateFlatShadedMesh(Mesh mesh, bool forceFullClear)
         {
             int quadsCount = (mapSize - 1) * (mapSize - 1);
             int vertexCount = quadsCount * 6;
@@ -88,11 +94,12 @@ namespace ProceduralTerrain
                     Vector2 uvTL = new Vector2((float)x / (mapSize - 1), (float)(y + 1) / (mapSize - 1));
                     Vector2 uvTR = new Vector2((float)(x + 1) / (mapSize - 1), (float)(y + 1) / (mapSize - 1));
 
+                    bool setTopology = reallocate || forceFullClear;
                     Vector3 normal1 = Vector3.Cross(vTL - vBL, vBR - vBL).normalized;
-                    AddTriangle(ref vertIndex, vBL, vTL, vBR, uvBL, uvTL, uvBR, normal1, reallocate);
+                    AddTriangle(ref vertIndex, vBL, vTL, vBR, uvBL, uvTL, uvBR, normal1, setTopology);
 
                     Vector3 normal2 = Vector3.Cross(vTR - vTL, vBR - vTL).normalized;
-                    AddTriangle(ref vertIndex, vTL, vTR, vBR, uvTL, uvTR, uvBR, normal2, reallocate);
+                    AddTriangle(ref vertIndex, vTL, vTR, vBR, uvTL, uvTR, uvBR, normal2, setTopology);
                 }
             }
 
@@ -100,7 +107,7 @@ namespace ProceduralTerrain
             mesh.normals = cachedNormals;
             mesh.colors = cachedColors;
 
-            if (reallocate)
+            if (reallocate || forceFullClear)
             {
                 mesh.uv = cachedUVs;
                 mesh.triangles = cachedTriangles;
@@ -117,6 +124,11 @@ namespace ProceduralTerrain
             int i0 = vertIndex++;
             int i1 = vertIndex++;
             int i2 = vertIndex++;
+
+            float floorY = settings.waterLevel - 3.5f;
+            if (float.IsNaN(v0.y) || float.IsInfinity(v0.y)) v0.y = floorY;
+            if (float.IsNaN(v1.y) || float.IsInfinity(v1.y)) v1.y = floorY;
+            if (float.IsNaN(v2.y) || float.IsInfinity(v2.y)) v2.y = floorY;
 
             cachedVertices[i0] = v0;
             cachedVertices[i1] = v1;
@@ -142,7 +154,7 @@ namespace ProceduralTerrain
             }
         }
 
-        private void GenerateSmoothMesh(Mesh mesh)
+        private void GenerateSmoothMesh(Mesh mesh, bool forceFullClear)
         {
             int totalVerts = mapSize * mapSize;
             if (totalVerts > 65535)
@@ -171,14 +183,14 @@ namespace ProceduralTerrain
                     float wy = heightMap[x, y];
 
                     cachedVertices[index] = new Vector3(wx, wy, wz);
-                    if (reallocate)
+                    if (reallocate || forceFullClear)
                     {
                         cachedUVs[index] = new Vector2((float)x / (mapSize - 1), (float)y / (mapSize - 1));
                     }
                 }
             }
 
-            if (reallocate)
+            if (reallocate || forceFullClear)
             {
                 int triIndex = 0;
                 for (int y = 0; y < mapSize - 1; y++)

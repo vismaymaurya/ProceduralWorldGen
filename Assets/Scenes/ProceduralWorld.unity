@@ -882,11 +882,11 @@ MonoBehaviour:
     mapSize: 96
     worldSize: 120
     seed: 432973
-    baseHeight: 2
+    baseHeight: 5.8
     maxHeight: 28
-    islandRadius: 0.65
-    islandFalloffSharpness: 0.25
-    coastlineWarpStrength: 12
+    islandRadius: 0.74
+    islandFalloffSharpness: 0.28
+    coastlineWarpStrength: 15
     mainNoiseFrequency: 0.015
     mainNoiseOctaves: 4
     mountainNoiseFrequency: 0.035
@@ -897,9 +897,9 @@ MonoBehaviour:
     beachHeight: 5.2
     generateRivers: 1
     riverCount: 4
-    riverDepth: 2.2
-    riverWidth: 3.5
-    minWaterfallHeight: 2
+    riverDepth: 0.8
+    riverWidth: 2.8
+    minWaterfallHeight: 2.2
     flatShaded: 1
   terrainMaterial: {fileID: 2100000, guid: 10111213141516171819202122232425, type: 2}
   waterMaterial: {fileID: 2100000, guid: 20212223242526272829303132333435, type: 2}

@@ -15,15 +15,16 @@ namespace ProceduralTerrain
 
         [Header("Seed & Elevation")]
         public int seed = 42;
-        public float baseHeight = 2.0f;
+        public float baseElevation = 5.8f;
+        public float baseHeight = 5.8f;
         public float maxHeight = 28f;
 
         [Header("Island Shape & Masking")]
         [Range(0.2f, 0.95f)]
-        public float islandRadius = 0.65f;
+        public float islandRadius = 0.74f;
         [Range(0.01f, 0.5f)]
-        public float islandFalloffSharpness = 0.25f;
-        public float coastlineWarpStrength = 12f;
+        public float islandFalloffSharpness = 0.28f;
+        public float coastlineWarpStrength = 15f;
 
         [Header("Noise Layers")]
         public float mainNoiseFrequency = 0.015f;
@@ -42,9 +43,11 @@ namespace ProceduralTerrain
         public bool generateRivers = true;
         [Range(1, 8)]
         public int riverCount = 4;
-        public float riverDepth = 2.2f;
-        public float riverWidth = 3.5f;
-        public float minWaterfallHeight = 2.0f;
+        [Range(0.1f, 2.0f)]
+        public float riverDepth = 0.8f;
+        [Range(1.5f, 6.0f)]
+        public float riverWidth = 2.8f;
+        public float minWaterfallHeight = 2.2f;
 
         [Header("Mesh Styling")]
         [Tooltip("True for flat-shaded low-poly faceted look; False for smooth fairytale shading")]

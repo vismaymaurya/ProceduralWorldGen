@@ -28,28 +28,34 @@ Welcome to the **Fairytale Procedural Terrain Generation & Sculpting System** fo
 | :--- | :--- |
 | **Paint / Sculpt Terrain** | **Left Click** on the terrain surface |
 | **Switch to Mountain Tool** | Key **1** (Raises land into peaks and rocky cliffs) |
-| **Switch to River Tool** | Key **2** (Carves land below water level into lakes and rivers) |
+| **Switch to River Tool** | Key **2** (Sculpts shallow riverbeds and places conformed flowing water; cliffs >50° spawn waterfalls) |
 | **Switch to Plateau Tool** | Key **3** (Flattens and levels terrain to clicked height) |
 | **Switch to Smooth Tool** | Key **4** (Relaxes steep, sharp bumps) |
 | **Switch to Foliage Tool** | Key **5** (Plants fairytale trees on clicked surface) |
 | **Switch to Erase Tool** | Key **6** (Removes trees and foliage within brush radius) |
-| **Resize Brush Radius** | Hold **Left Shift** + Scroll **Mouse Wheel** |
-| **Randomize New Island** | Press **Spacebar** |
+| **Resize Brush Radius** | Keys **[** / **]** or on-screen slider |
+| **Adjust Brush Power** | On-screen **Power** slider |
+| **Randomize New Island** | Press **Spacebar** or click **`🎲 New Island`** |
 | **Toggle UI Visibility** | Press **H** (Hide UI for clean cinematic view or screenshots) |
 
 ---
 
-## 3. The Bottom Toolbar
+## 3. The On-Screen Docks
 
-When running in Play mode, a cozy diorama dock appears at the bottom of the screen:
+### Active Brush Settings Dock (Above Toolbar)
+- **Tool Display**: Shows currently selected sculpting mode.
+- **Size Slider**: Live slider to dynamically adjust brush circle radius (`1.5` to `20.0`).
+- **Power Slider**: Live slider to dynamically adjust brush strength/speed (`0.2` to `3.5`).
 
+### The Bottom Toolbar
+When running in Play mode, a diorama dock appears at the bottom of the screen:
 - **[1 Mountain]**: Left-click and drag to raise peaks and mountain ranges.
-- **[2 River]**: Left-click and drag to carve river valleys, bays, and lakes.
+- **[2 River]**: Left-click and drag down hills to carve a shallow river channel and place flowing water without erasing mountains into an abyss.
 - **[3 Plateau]**: Left-click and drag to level the ground into flat building plateaus.
 - **[4 Smooth]**: Left-click and drag over uneven terrain to smooth the slopes.
 - **[5 Foliage]**: Left-click to plant deciduous, pine, or blossom trees.
 - **[6 Erase]**: Left-click to clear foliage in the brush circle.
-- **[🎲 New Island]**: Generates a completely fresh random island with new rivers, mountains, and trees.
+- **[🎲 New Island]**: Instantly rolls a random seed, recreates terrain, rivers, waterfalls, and trees with distinct mountain layouts.
 - **[⚙ Settings]**: Toggles the parameter adjustment sidebar.
 
 ---
@@ -58,13 +64,18 @@ When running in Play mode, a cozy diorama dock appears at the bottom of the scre
 
 In the **⚙ Settings** panel (or on the `ProceduralWorldManager` component in the Inspector), you can customize:
 
-- **Seed**: Change the numerical seed to reproduce specific island layouts.
-- **Island Radius**: Controls how much of the map is land vs ocean.
-- **Mountain Height**: Maximum elevation for central mountain peaks.
+- **`🎲 Generate Random Island`**: Generates a completely new island with a fresh random seed and distinct topography.
+- **Island Seed**: Type any seed number in the input box, or click **`🎲 Roll`** to pick a random seed instantly!
+- **Terrain Height**: Maximum elevation for central mountain peaks (10m to 50m).
+- **River Depth**: Controls depth of carved riverbeds (0.10 to 1.80 units; shallow channels look best).
+- **River Width**: Width of procedural and painted water ribbons (1.5 to 6.0 units).
 - **Water Level**: Height of the ocean plane (affects beaches, bays, and rivers).
-- **River Count**: Number of downhill rivers carved from mountain ridges.
+- **River Count**: Number of procedural downhill rivers carved from mountain ridges.
+- **Island Radius**: Controls how much of the map is land vs ocean.
 - **Coastline Warping**: Strength of domain warping for organic coastal bays.
 - **Low-Poly Flat Shading**: Toggle between faceted papercraft style and smooth shaded normals.
+- **🔄 Re-generate Island**: Rebuilds the entire world with current settings.
+- **🌊 Clear Custom Rivers**: Clears player-painted rivers and restores procedural rivers.
 
 ---
 
