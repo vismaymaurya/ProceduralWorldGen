@@ -21,12 +21,12 @@ namespace ProceduralTerrain
         public Material rockMaterial;
         public Material flowerMaterial;
 
-        // Cached procedural prototype meshes
-        private Mesh pineMesh;
-        private Mesh deciduousMesh;
-        private Mesh blossomMesh;
-        private Mesh rockMesh;
-        private Mesh flowerMesh;
+        // Cached procedural prototype meshes (built once, reused forever)
+        private static Mesh pineMesh;
+        private static Mesh deciduousMesh;
+        private static Mesh blossomMesh;
+        private static Mesh rockMesh;
+        private static Mesh flowerMesh;
 
         private GameObject foliageRoot;
         private List<GameObject> spawnedFoliage = new List<GameObject>();
@@ -36,13 +36,46 @@ namespace ProceduralTerrain
             EnsurePrototypes();
         }
 
+        private void OnDestroy()
+        {
+            ClearFoliage();
+        }
+
+        private void OnDisable()
+        {
+            if (!Application.isPlaying)
+            {
+                ClearFoliage();
+            }
+        }
+
         public void EnsurePrototypes()
         {
-            if (pineMesh == null) pineMesh = BuildPineTreeMesh();
-            if (deciduousMesh == null) deciduousMesh = BuildDeciduousTreeMesh();
-            if (blossomMesh == null) blossomMesh = BuildDeciduousTreeMesh(true);
-            if (rockMesh == null) rockMesh = BuildRockMesh();
-            if (flowerMesh == null) flowerMesh = BuildFlowerClumpMesh();
+            if (pineMesh == null)
+            {
+                pineMesh = BuildPineTreeMesh();
+                pineMesh.hideFlags = HideFlags.DontSave;
+            }
+            if (deciduousMesh == null)
+            {
+                deciduousMesh = BuildDeciduousTreeMesh();
+                deciduousMesh.hideFlags = HideFlags.DontSave;
+            }
+            if (blossomMesh == null)
+            {
+                blossomMesh = BuildDeciduousTreeMesh(true);
+                blossomMesh.hideFlags = HideFlags.DontSave;
+            }
+            if (rockMesh == null)
+            {
+                rockMesh = BuildRockMesh();
+                rockMesh.hideFlags = HideFlags.DontSave;
+            }
+            if (flowerMesh == null)
+            {
+                flowerMesh = BuildFlowerClumpMesh();
+                flowerMesh.hideFlags = HideFlags.DontSave;
+            }
 
             EnsureMaterials();
         }
@@ -67,33 +100,32 @@ namespace ProceduralTerrain
 
             System.Random prng = new System.Random(settings.seed + 777);
 
-            // Stride based on density
-            int step = 2;
-            for (int y = 2; y < mapSize - 2; y += step)
+            // Stride of 3 gives great clustering while keeping tree count modest (150-250 trees max)
+            int step = 3;
+            int maxTrees = 250;
+            int treesSpawned = 0;
+
+            for (int y = 3; y < mapSize - 3 && treesSpawned < maxTrees; y += step)
             {
-                for (int x = 2; x < mapSize - 2; x += step)
+                for (int x = 3; x < mapSize - 3 && treesSpawned < maxTrees; x += step)
                 {
                     float h = heightMap[x, y];
 
-                    // Check water and beach
                     if (h < settings.beachHeight + 0.4f)
                         continue;
 
-                    // Mountain snow line cutoff
                     if (h > settings.maxHeight * 0.72f)
                         continue;
 
-                    // Estimate normal steepness from neighbors
                     float hL = heightMap[Mathf.Max(0, x - 1), y];
                     float hR = heightMap[Mathf.Min(mapSize - 1, x + 1), y];
                     float hD = heightMap[x, Mathf.Max(0, y - 1)];
                     float hU = heightMap[x, Mathf.Min(mapSize - 1, y + 1)];
 
                     Vector3 normal = new Vector3(hL - hR, cellSize * 2f, hD - hU).normalized;
-                    if (normal.y < 0.78f) // Too steep for trees
+                    if (normal.y < 0.78f)
                     {
-                        // Potential rock on steep terrain or river banks
-                        if ((float)prng.NextDouble() < rockDensity * 0.15f)
+                        if ((float)prng.NextDouble() < rockDensity * 0.12f)
                         {
                             Vector3 rPos = new Vector3(x * cellSize - halfWorld, h, y * cellSize - halfWorld);
                             SpawnRock(rPos, prng);
@@ -107,20 +139,16 @@ namespace ProceduralTerrain
 
                     float fNoise = (forestNoise.GetNoise(wx, wz) + 1f) * 0.5f;
 
-                    // Forest zone: spawn trees in organic groves
                     if (fNoise > (1f - treeDensity * 0.85f))
                     {
-                        if ((float)prng.NextDouble() < 0.65f)
+                        if ((float)prng.NextDouble() < 0.7f)
                         {
-                            // Pick tree type based on elevation & random roll
                             if (h > settings.maxHeight * 0.45f)
                             {
-                                // Higher hills: Pine trees
                                 SpawnTree(worldPos, FoliageType.PineTree, prng);
                             }
                             else
                             {
-                                // Lowland: Deciduous oaks and occasional cherry blossoms
                                 double roll = prng.NextDouble();
                                 if (roll < 0.65)
                                     SpawnTree(worldPos, FoliageType.DeciduousTree, prng);
@@ -129,12 +157,12 @@ namespace ProceduralTerrain
                                 else
                                     SpawnTree(worldPos, FoliageType.PineTree, prng);
                             }
+                            treesSpawned++;
                         }
                     }
-                    else if (fNoise < 0.45f)
+                    else if (fNoise < 0.42f)
                     {
-                        // Meadow glades: Wildflower clusters
-                        if ((float)prng.NextDouble() < flowerDensity * 0.35f)
+                        if ((float)prng.NextDouble() < flowerDensity * 0.3f)
                         {
                             SpawnFlower(worldPos, prng);
                         }
@@ -163,7 +191,7 @@ namespace ProceduralTerrain
                 var f = spawnedFoliage[i];
                 if (f != null && (f.transform.position - center).sqrMagnitude <= sqrR)
                 {
-                    DestroyImmediate(f);
+                    SafeDestroyGO(f);
                     spawnedFoliage.RemoveAt(i);
                 }
             }
@@ -173,7 +201,8 @@ namespace ProceduralTerrain
         {
             if (foliageRoot != null)
             {
-                DestroyImmediate(foliageRoot);
+                SafeDestroyGO(foliageRoot);
+                foliageRoot = null;
             }
             spawnedFoliage.Clear();
         }
@@ -253,8 +282,7 @@ namespace ProceduralTerrain
 
         private Mesh BuildPineTreeMesh()
         {
-            // Submesh 0: Trunk, Submesh 1: Conical Foliage
-            Mesh mesh = new Mesh { name = "ProceduralPineMesh", subMeshCount = 2 };
+            Mesh mesh = new Mesh { name = "ProceduralPineMesh", subMeshCount = 2, hideFlags = HideFlags.DontSave };
 
             List<Vector3> verts = new List<Vector3>();
             List<Vector3> normals = new List<Vector3>();
@@ -262,10 +290,7 @@ namespace ProceduralTerrain
             List<int> trunkTris = new List<int>();
             List<int> foliageTris = new List<int>();
 
-            // Trunk: 6-sided cylinder
             AddCylinder(verts, normals, colors, trunkTris, new Vector3(0, 0, 0), new Vector3(0, 1.4f, 0), 0.22f, 0.16f, 6, new Color(0.45f, 0.30f, 0.18f));
-
-            // 3 Conical Tiers
             AddCone(verts, normals, colors, foliageTris, new Vector3(0, 1.0f, 0), 1.6f, 1.35f, 6, new Color(0.18f, 0.48f, 0.22f));
             AddCone(verts, normals, colors, foliageTris, new Vector3(0, 1.8f, 0), 1.5f, 1.10f, 6, new Color(0.20f, 0.52f, 0.24f));
             AddCone(verts, normals, colors, foliageTris, new Vector3(0, 2.5f, 0), 1.4f, 0.80f, 6, new Color(0.24f, 0.58f, 0.28f));
@@ -281,7 +306,7 @@ namespace ProceduralTerrain
 
         private Mesh BuildDeciduousTreeMesh(bool blossom = false)
         {
-            Mesh mesh = new Mesh { name = blossom ? "ProceduralBlossomMesh" : "ProceduralDeciduousMesh", subMeshCount = 2 };
+            Mesh mesh = new Mesh { name = blossom ? "ProceduralBlossomMesh" : "ProceduralDeciduousMesh", subMeshCount = 2, hideFlags = HideFlags.DontSave };
 
             List<Vector3> verts = new List<Vector3>();
             List<Vector3> normals = new List<Vector3>();
@@ -289,13 +314,11 @@ namespace ProceduralTerrain
             List<int> trunkTris = new List<int>();
             List<int> foliageTris = new List<int>();
 
-            // Trunk: slightly tapered
             AddCylinder(verts, normals, colors, trunkTris, Vector3.zero, new Vector3(0, 1.6f, 0), 0.28f, 0.20f, 6, new Color(0.48f, 0.34f, 0.22f));
 
             Color canopyCol = blossom ? new Color(0.96f, 0.65f, 0.74f) : new Color(0.32f, 0.72f, 0.22f);
             Color canopyHighlight = blossom ? new Color(1.0f, 0.78f, 0.86f) : new Color(0.42f, 0.82f, 0.28f);
 
-            // 3 Clustered low-poly spheres for organic canopy
             AddIcoSphere(verts, normals, colors, foliageTris, new Vector3(0, 2.2f, 0), 1.15f, canopyCol);
             AddIcoSphere(verts, normals, colors, foliageTris, new Vector3(0.45f, 2.0f, 0.35f), 0.85f, canopyHighlight);
             AddIcoSphere(verts, normals, colors, foliageTris, new Vector3(-0.4f, 2.1f, -0.3f), 0.90f, canopyCol);
@@ -311,7 +334,7 @@ namespace ProceduralTerrain
 
         private Mesh BuildRockMesh()
         {
-            Mesh mesh = new Mesh { name = "ProceduralRockMesh" };
+            Mesh mesh = new Mesh { name = "ProceduralRockMesh", hideFlags = HideFlags.DontSave };
             List<Vector3> verts = new List<Vector3>();
             List<Vector3> normals = new List<Vector3>();
             List<Color> colors = new List<Color>();
@@ -319,7 +342,6 @@ namespace ProceduralTerrain
 
             AddIcoSphere(verts, normals, colors, tris, Vector3.zero, 0.8f, new Color(0.55f, 0.52f, 0.48f));
 
-            // Flatten slightly and randomize points
             System.Random prng = new System.Random(42);
             for (int i = 0; i < verts.Count; i++)
             {
@@ -344,17 +366,16 @@ namespace ProceduralTerrain
 
         private Mesh BuildFlowerClumpMesh()
         {
-            Mesh mesh = new Mesh { name = "ProceduralFlowerClumpMesh" };
+            Mesh mesh = new Mesh { name = "ProceduralFlowerClumpMesh", hideFlags = HideFlags.DontSave };
             List<Vector3> verts = new List<Vector3>();
             List<Vector3> normals = new List<Vector3>();
             List<Color> colors = new List<Color>();
             List<int> tris = new List<int>();
 
-            // Small cluster of 5 colored flower dots
             Color[] flowerColors = new Color[] {
-                new Color(1f, 0.88f, 0.2f),  // Warm yellow
-                new Color(0.95f, 0.35f, 0.45f), // Wild poppy red
-                new Color(0.75f, 0.5f, 0.95f)  // Lavender
+                new Color(1f, 0.88f, 0.2f),
+                new Color(0.95f, 0.35f, 0.45f),
+                new Color(0.75f, 0.5f, 0.95f)
             };
 
             System.Random prng = new System.Random(99);
@@ -375,8 +396,6 @@ namespace ProceduralTerrain
             mesh.RecalculateBounds();
             return mesh;
         }
-
-        // ================= PRIMITIVE MESH HELPERS =================
 
         private void AddCylinder(List<Vector3> verts, List<Vector3> normals, List<Color> colors, List<int> tris,
             Vector3 bottom, Vector3 top, float rBottom, float rTop, int sides, Color col)
@@ -430,7 +449,6 @@ namespace ProceduralTerrain
                 colors.Add(col);
             }
 
-            // Apex vert for each side (for sharp faceted normals)
             for (int i = 0; i < sides; i++)
             {
                 int next = (i + 1) % sides;
@@ -490,38 +508,45 @@ namespace ProceduralTerrain
             }
         }
 
+        private void SafeDestroyGO(GameObject go)
+        {
+            if (go == null) return;
+            if (Application.isPlaying) Destroy(go);
+            else DestroyImmediate(go);
+        }
+
         private void EnsureMaterials()
         {
             Shader standardShader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
 
             if (trunkMaterial == null)
             {
-                trunkMaterial = new Material(standardShader) { name = "Mat_TreeTrunk" };
+                trunkMaterial = new Material(standardShader) { name = "Mat_TreeTrunk", hideFlags = HideFlags.DontSave };
                 trunkMaterial.color = new Color(0.45f, 0.32f, 0.20f);
             }
             if (pineNeedleMaterial == null)
             {
-                pineNeedleMaterial = new Material(standardShader) { name = "Mat_PineNeedles" };
+                pineNeedleMaterial = new Material(standardShader) { name = "Mat_PineNeedles", hideFlags = HideFlags.DontSave };
                 pineNeedleMaterial.color = new Color(0.18f, 0.50f, 0.22f);
             }
             if (deciduousCanopyMaterial == null)
             {
-                deciduousCanopyMaterial = new Material(standardShader) { name = "Mat_DeciduousCanopy" };
+                deciduousCanopyMaterial = new Material(standardShader) { name = "Mat_DeciduousCanopy", hideFlags = HideFlags.DontSave };
                 deciduousCanopyMaterial.color = new Color(0.35f, 0.74f, 0.25f);
             }
             if (blossomCanopyMaterial == null)
             {
-                blossomCanopyMaterial = new Material(standardShader) { name = "Mat_BlossomCanopy" };
+                blossomCanopyMaterial = new Material(standardShader) { name = "Mat_BlossomCanopy", hideFlags = HideFlags.DontSave };
                 blossomCanopyMaterial.color = new Color(0.96f, 0.65f, 0.75f);
             }
             if (rockMaterial == null)
             {
-                rockMaterial = new Material(standardShader) { name = "Mat_RiverRock" };
+                rockMaterial = new Material(standardShader) { name = "Mat_RiverRock", hideFlags = HideFlags.DontSave };
                 rockMaterial.color = new Color(0.55f, 0.52f, 0.48f);
             }
             if (flowerMaterial == null)
             {
-                flowerMaterial = new Material(standardShader) { name = "Mat_FlowerCluster" };
+                flowerMaterial = new Material(standardShader) { name = "Mat_FlowerCluster", hideFlags = HideFlags.DontSave };
                 flowerMaterial.color = new Color(0.95f, 0.85f, 0.25f);
             }
         }

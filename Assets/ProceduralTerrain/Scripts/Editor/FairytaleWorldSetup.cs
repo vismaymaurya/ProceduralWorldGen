@@ -6,25 +6,9 @@ using UnityEngine.Rendering.Universal;
 
 namespace ProceduralTerrain
 {
-    [InitializeOnLoad]
     public static class FairytaleWorldSetup
     {
         private const string MaterialsPath = "Assets/ProceduralTerrain/Materials";
-        private const string SetupKey = "ProceduralWorld_HasAutoSetup_v1";
-
-        static FairytaleWorldSetup()
-        {
-            EditorApplication.delayCall += CheckAutoSetup;
-        }
-
-        private static void CheckAutoSetup()
-        {
-            if (!SessionState.GetBool(SetupKey, false))
-            {
-                SessionState.SetBool(SetupKey, true);
-                SetupWorldInCurrentScene();
-            }
-        }
 
         [MenuItem("Fairytale World/Setup Complete Scene", false, 1)]
         public static void SetupWorldInCurrentScene()
@@ -44,7 +28,7 @@ namespace ProceduralTerrain
             }
 
             sunLight.transform.rotation = Quaternion.Euler(50f, -40f, 0f);
-            sunLight.color = new Color(1.0f, 0.96f, 0.88f); // Warm sun
+            sunLight.color = new Color(1.0f, 0.96f, 0.88f);
             sunLight.intensity = 1.35f;
             sunLight.shadows = LightShadows.Soft;
 
@@ -54,13 +38,12 @@ namespace ProceduralTerrain
             {
                 DioramaCameraController camCtrl = cam.GetComponent<DioramaCameraController>();
                 if (camCtrl == null) camCtrl = cam.gameObject.AddComponent<DioramaCameraController>();
-                camCtrl.focalPoint = new Vector3(0, 5, 0);
-                camCtrl.distance = 65f;
+                camCtrl.focalPoint = new Vector3(0, 4, 0);
+                camCtrl.distance = 68f;
                 camCtrl.pitch = 45f;
                 camCtrl.yaw = 45f;
                 camCtrl.UpdateCameraTransformImmediate();
 
-                // Ensure URP Additional Camera Data enables depth texture for water foam
                 UniversalAdditionalCameraData camData = cam.GetComponent<UniversalAdditionalCameraData>();
                 if (camData != null)
                 {
@@ -92,12 +75,11 @@ namespace ProceduralTerrain
             uiController.worldManager = manager;
             uiController.brushTool = brushTool;
 
-            // Generate initial island
+            // Generate initial island preview in editor
             manager.GenerateWorld();
 
-            // Mark scene dirty and save
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-            Debug.Log("<color=#44FF88><b>[Fairytale World]</b> Successfully generated procedural fairytale terrain scene!</color>");
+            Debug.Log("<color=#44FF88><b>[Fairytale World]</b> Scene configured successfully!</color>");
         }
 
         private static void EnsureMaterialsDirectory()

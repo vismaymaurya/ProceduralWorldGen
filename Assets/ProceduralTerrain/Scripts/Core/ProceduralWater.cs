@@ -11,7 +11,22 @@ namespace ProceduralTerrain
         public float waterPlaneSizeMultiplier = 1.35f;
 
         private GameObject waterPlaneObj;
+        private Mesh waterPlaneMesh;
         private List<GameObject> waterfallObjects = new List<GameObject>();
+        private List<Mesh> waterfallMeshes = new List<Mesh>();
+
+        private void OnDestroy()
+        {
+            ClearWater();
+        }
+
+        private void OnDisable()
+        {
+            if (!Application.isPlaying)
+            {
+                ClearWater();
+            }
+        }
 
         public void BuildWater(TerrainGenerationSettings settings, List<WaterfallPoint> waterfalls)
         {
@@ -26,7 +41,8 @@ namespace ProceduralTerrain
             MeshRenderer mr = waterPlaneObj.AddComponent<MeshRenderer>();
 
             float size = settings.worldSize * waterPlaneSizeMultiplier;
-            mf.sharedMesh = CreateWaterPlaneMesh(size, 40);
+            waterPlaneMesh = CreateWaterPlaneMesh(size, 40);
+            mf.sharedMesh = waterPlaneMesh;
 
             if (waterMaterial != null)
             {
@@ -39,22 +55,44 @@ namespace ProceduralTerrain
 
         public void ClearWater()
         {
-            if (waterPlaneObj != null)
+            if (waterPlaneMesh != null)
             {
-                DestroyImmediate(waterPlaneObj);
+                SafeDestroyMesh(waterPlaneMesh);
+                waterPlaneMesh = null;
             }
 
-            foreach (var wf in waterfallObjects)
+            if (waterPlaneObj != null)
             {
-                if (wf != null) DestroyImmediate(wf);
+                SafeDestroyGO(waterPlaneObj);
+                waterPlaneObj = null;
+            }
+
+            for (int i = 0; i < waterfallMeshes.Count; i++)
+            {
+                if (waterfallMeshes[i] != null)
+                {
+                    SafeDestroyMesh(waterfallMeshes[i]);
+                }
+            }
+            waterfallMeshes.Clear();
+
+            for (int i = 0; i < waterfallObjects.Count; i++)
+            {
+                if (waterfallObjects[i] != null)
+                {
+                    SafeDestroyGO(waterfallObjects[i]);
+                }
             }
             waterfallObjects.Clear();
         }
 
         private Mesh CreateWaterPlaneMesh(float size, int segments)
         {
-            Mesh mesh = new Mesh();
-            mesh.name = "WaterSurfaceMesh";
+            Mesh mesh = new Mesh
+            {
+                name = "WaterSurfaceMesh",
+                hideFlags = HideFlags.DontSave
+            };
 
             int vertCount = (segments + 1) * (segments + 1);
             Vector3[] verts = new Vector3[vertCount];
@@ -118,13 +156,16 @@ namespace ProceduralTerrain
                 MeshFilter mf = wfObj.AddComponent<MeshFilter>();
                 MeshRenderer mr = wfObj.AddComponent<MeshRenderer>();
 
-                mf.sharedMesh = GenerateWaterfallMesh(wp);
+                Mesh wfMesh = GenerateWaterfallMesh(wp);
+                waterfallMeshes.Add(wfMesh);
+                mf.sharedMesh = wfMesh;
+
                 if (waterfallMaterial != null)
                 {
                     mr.sharedMaterial = waterfallMaterial;
                 }
 
-                // Add subtle foam splash ring at base
+                // Add subtle foam splash quad at base
                 GameObject splashObj = GameObject.CreatePrimitive(PrimitiveType.Quad);
                 splashObj.name = "SplashFoam";
                 splashObj.transform.SetParent(wfObj.transform, false);
@@ -132,7 +173,6 @@ namespace ProceduralTerrain
                 splashObj.transform.rotation = Quaternion.Euler(90, 0, 0);
                 splashObj.transform.localScale = new Vector3(wp.width * 1.6f, wp.width * 1.6f, 1f);
 
-                // Remove collider
                 Collider c = splashObj.GetComponent<Collider>();
                 if (c != null) DestroyImmediate(c);
 
@@ -148,8 +188,11 @@ namespace ProceduralTerrain
 
         private Mesh GenerateWaterfallMesh(WaterfallPoint wp)
         {
-            Mesh mesh = new Mesh();
-            mesh.name = "WaterfallMesh";
+            Mesh mesh = new Mesh
+            {
+                name = "WaterfallMesh",
+                hideFlags = HideFlags.DontSave
+            };
 
             int segments = 8;
             Vector3[] verts = new Vector3[(segments + 1) * 2];
@@ -163,7 +206,6 @@ namespace ProceduralTerrain
             {
                 float t = (float)s / segments;
 
-                // Parabolic curved arc as water plunges over cliff
                 Vector3 center = Vector3.Lerp(wp.startPosition, wp.endPosition, t);
                 center += wp.flowDirection * Mathf.Sin(t * Mathf.PI) * 0.4f;
 
@@ -176,7 +218,6 @@ namespace ProceduralTerrain
                 uvs[iLeft] = new Vector2(0, t * 3f);
                 uvs[iRight] = new Vector2(1, t * 3f);
 
-                // Alpha gradient for foam fade
                 float alpha = (s == 0 || s == segments) ? 0.3f : 0.95f;
                 colors[iLeft] = new Color(1, 1, 1, alpha);
                 colors[iRight] = new Color(1, 1, 1, alpha);
@@ -190,7 +231,6 @@ namespace ProceduralTerrain
                 int tl = (s + 1) * 2;
                 int tr = (s + 1) * 2 + 1;
 
-                // Front face
                 tris[tri++] = bl;
                 tris[tri++] = tl;
                 tris[tri++] = br;
@@ -208,6 +248,20 @@ namespace ProceduralTerrain
             mesh.RecalculateBounds();
 
             return mesh;
+        }
+
+        private void SafeDestroyMesh(Mesh m)
+        {
+            if (m == null) return;
+            if (Application.isPlaying) Destroy(m);
+            else DestroyImmediate(m);
+        }
+
+        private void SafeDestroyGO(GameObject go)
+        {
+            if (go == null) return;
+            if (Application.isPlaying) Destroy(go);
+            else DestroyImmediate(go);
         }
     }
 }

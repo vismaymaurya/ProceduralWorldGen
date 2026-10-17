@@ -29,6 +29,8 @@ namespace ProceduralTerrain
         private MeshRenderer meshRenderer;
         private MeshCollider meshCollider;
         private Mesh currentTerrainMesh;
+        private IslandMeshGenerator cachedMeshGen;
+
         private List<WaterfallPoint> activeWaterfalls = new List<WaterfallPoint>();
         private List<List<Vector3>> activeRiverPaths = new List<List<Vector3>>();
 
@@ -51,6 +53,44 @@ namespace ProceduralTerrain
             if (Application.isPlaying && generateOnStart)
             {
                 GenerateWorld();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            CleanupMesh();
+        }
+
+        private void OnDisable()
+        {
+            if (!Application.isPlaying)
+            {
+                CleanupMesh();
+            }
+        }
+
+        private void CleanupMesh()
+        {
+            if (currentTerrainMesh != null)
+            {
+                if (meshFilter != null && meshFilter.sharedMesh == currentTerrainMesh)
+                {
+                    meshFilter.sharedMesh = null;
+                }
+                if (meshCollider != null && meshCollider.sharedMesh == currentTerrainMesh)
+                {
+                    meshCollider.sharedMesh = null;
+                }
+
+                if (Application.isPlaying)
+                {
+                    Destroy(currentTerrainMesh);
+                }
+                else
+                {
+                    DestroyImmediate(currentTerrainMesh);
+                }
+                currentTerrainMesh = null;
             }
         }
 
@@ -97,9 +137,9 @@ namespace ProceduralTerrain
             RiverGenerator riverGen = new RiverGenerator(settings, heightMap);
             activeWaterfalls = riverGen.GenerateRivers(out activeRiverPaths);
 
-            // 3. Generate terrain mesh
-            IslandMeshGenerator meshGen = new IslandMeshGenerator(settings, heightMap);
-            currentTerrainMesh = meshGen.GenerateMesh();
+            // 3. Generate or update terrain mesh (REUSING single Mesh instance)
+            cachedMeshGen = new IslandMeshGenerator(settings, heightMap);
+            currentTerrainMesh = cachedMeshGen.GenerateOrUpdateMesh(currentTerrainMesh);
             meshFilter.sharedMesh = currentTerrainMesh;
             meshCollider.sharedMesh = currentTerrainMesh;
 
@@ -158,29 +198,22 @@ namespace ProceduralTerrain
                     float wx = (x / (float)(size - 1)) * settings.worldSize - halfWorld;
                     float wz = (y / (float)(size - 1)) * settings.worldSize - halfWorld;
 
-                    // Domain warp for organic fairytale coastlines
                     float warpedX = wx;
                     float warpedZ = wz;
                     warpNoise.DomainWarp(ref warpedX, ref warpedZ);
 
-                    // Circular / rounded island falloff
                     float distFromCenter = Mathf.Sqrt(warpedX * warpedX + warpedZ * warpedZ);
                     float edge0 = centerDistMax * (1.0f - settings.islandFalloffSharpness);
                     float edge1 = centerDistMax;
                     float islandMask = 1.0f - Mathf.SmoothStep(edge0, edge1, distFromCenter);
 
-                    // Noise calculations
                     float nBase = (baseNoise.GetNoise(warpedX, warpedZ) + 1.0f) * 0.5f;
                     float nMountain = Mathf.Max(0, mountainNoise.GetNoise(warpedX * 1.4f, warpedZ * 1.4f));
 
-                    // Combined elevation
                     float elevation = (nBase * 0.6f + nMountain * 0.5f * settings.mountainHeightMultiplier);
                     elevation *= settings.maxHeight * islandMask;
-
-                    // Base height offset
                     elevation += settings.baseHeight * islandMask;
 
-                    // Ocean bed floor for areas outside island
                     float oceanFloor = settings.waterLevel - 3.5f;
                     heightMap[x, y] = Mathf.Max(oceanFloor, elevation);
                 }
@@ -203,9 +236,7 @@ namespace ProceduralTerrain
 
             int cx = Mathf.RoundToInt(gx);
             int cy = Mathf.RoundToInt(gy);
-
             int radiusCells = Mathf.CeilToInt(radius / cellSize);
-
             float targetPlateauHeight = hitPoint.y;
 
             bool modified = false;
@@ -223,7 +254,6 @@ namespace ProceduralTerrain
                     float dist = Vector2.Distance(new Vector2(x, y), new Vector2(gx, gy)) * cellSize;
                     if (dist > radius) continue;
 
-                    // Smooth cosine brush falloff
                     float falloff = Mathf.Cos((dist / radius) * Mathf.PI * 0.5f);
                     float delta = strength * falloff * Time.deltaTime * 10f;
 
@@ -256,7 +286,8 @@ namespace ProceduralTerrain
 
             if (modified)
             {
-                RebuildMesh();
+                // In-place mesh vertex/color update without reallocating native mesh
+                UpdateTerrainMeshVisualsOnly();
             }
 
             // Foliage brush actions
@@ -270,22 +301,40 @@ namespace ProceduralTerrain
             }
         }
 
-        public void RebuildMesh()
+        /// <summary>
+        /// Real-time visual update during brush drag - reuses existing mesh buffer without PhysX bake.
+        /// </summary>
+        public void UpdateTerrainMeshVisualsOnly()
         {
             if (heightMap == null) return;
+            if (cachedMeshGen == null)
+            {
+                cachedMeshGen = new IslandMeshGenerator(settings, heightMap);
+            }
 
-            IslandMeshGenerator meshGen = new IslandMeshGenerator(settings, heightMap);
-            currentTerrainMesh = meshGen.GenerateMesh();
-            meshFilter.sharedMesh = currentTerrainMesh;
-            meshCollider.sharedMesh = currentTerrainMesh;
+            currentTerrainMesh = cachedMeshGen.GenerateOrUpdateMesh(currentTerrainMesh);
+            if (meshFilter != null && meshFilter.sharedMesh != currentTerrainMesh)
+            {
+                meshFilter.sharedMesh = currentTerrainMesh;
+            }
         }
 
-        private void OnValidate()
+        /// <summary>
+        /// Bakes collision mesh when mouse is released or full regeneration occurs.
+        /// </summary>
+        public void BakeCollisionMesh()
         {
-            if (autoUpdateInEditor && !Application.isPlaying)
+            if (meshCollider != null && currentTerrainMesh != null)
             {
-                GenerateWorld();
+                meshCollider.sharedMesh = null; // Forces PhysX refresh
+                meshCollider.sharedMesh = currentTerrainMesh;
             }
+        }
+
+        public void RebuildMesh()
+        {
+            UpdateTerrainMeshVisualsOnly();
+            BakeCollisionMesh();
         }
     }
 }

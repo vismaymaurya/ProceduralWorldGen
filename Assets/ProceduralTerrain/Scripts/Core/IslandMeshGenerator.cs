@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace ProceduralTerrain
@@ -11,6 +10,13 @@ namespace ProceduralTerrain
         private readonly float worldSize;
         private readonly float cellSize;
 
+        // Reusable buffers to prevent GC allocations
+        private Vector3[] cachedVertices;
+        private Vector3[] cachedNormals;
+        private Vector2[] cachedUVs;
+        private Color[] cachedColors;
+        private int[] cachedTriangles;
+
         public IslandMeshGenerator(TerrainGenerationSettings settings, float[,] heightMap)
         {
             this.settings = settings;
@@ -20,22 +26,29 @@ namespace ProceduralTerrain
             this.cellSize = worldSize / (mapSize - 1);
         }
 
-        public Mesh GenerateMesh()
+        public Mesh GenerateOrUpdateMesh(Mesh targetMesh = null)
         {
-            Mesh mesh = new Mesh();
-            mesh.name = "ProceduralIslandMesh";
+            if (targetMesh == null)
+            {
+                targetMesh = new Mesh
+                {
+                    name = "ProceduralIslandMesh",
+                    hideFlags = HideFlags.DontSave
+                };
+                targetMesh.MarkDynamic();
+            }
 
             if (settings.flatShaded)
             {
-                GenerateFlatShadedMesh(mesh);
+                GenerateFlatShadedMesh(targetMesh);
             }
             else
             {
-                GenerateSmoothMesh(mesh);
+                GenerateSmoothMesh(targetMesh);
             }
 
-            mesh.RecalculateBounds();
-            return mesh;
+            targetMesh.RecalculateBounds();
+            return targetMesh;
         }
 
         private void GenerateFlatShadedMesh(Mesh mesh)
@@ -43,17 +56,20 @@ namespace ProceduralTerrain
             int quadsCount = (mapSize - 1) * (mapSize - 1);
             int vertexCount = quadsCount * 6;
 
-            // If vertex count exceeds 65535, use 32-bit index format
             if (vertexCount > 65535)
             {
                 mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             }
 
-            Vector3[] vertices = new Vector3[vertexCount];
-            Vector3[] normals = new Vector3[vertexCount];
-            Vector2[] uvs = new Vector2[vertexCount];
-            Color[] colors = new Color[vertexCount];
-            int[] triangles = new int[vertexCount];
+            bool reallocate = (cachedVertices == null || cachedVertices.Length != vertexCount);
+            if (reallocate)
+            {
+                cachedVertices = new Vector3[vertexCount];
+                cachedNormals = new Vector3[vertexCount];
+                cachedUVs = new Vector2[vertexCount];
+                cachedColors = new Color[vertexCount];
+                cachedTriangles = new int[vertexCount];
+            }
 
             float halfWorld = worldSize * 0.5f;
             int vertIndex = 0;
@@ -62,7 +78,6 @@ namespace ProceduralTerrain
             {
                 for (int x = 0; x < mapSize - 1; x++)
                 {
-                    // 4 corners of current quad
                     Vector3 vBL = new Vector3(x * cellSize - halfWorld, heightMap[x, y], y * cellSize - halfWorld);
                     Vector3 vBR = new Vector3((x + 1) * cellSize - halfWorld, heightMap[x + 1, y], y * cellSize - halfWorld);
                     Vector3 vTL = new Vector3(x * cellSize - halfWorld, heightMap[x, y + 1], (y + 1) * cellSize - halfWorld);
@@ -73,59 +88,58 @@ namespace ProceduralTerrain
                     Vector2 uvTL = new Vector2((float)x / (mapSize - 1), (float)(y + 1) / (mapSize - 1));
                     Vector2 uvTR = new Vector2((float)(x + 1) / (mapSize - 1), (float)(y + 1) / (mapSize - 1));
 
-                    // Triangle 1: BL -> TL -> BR
                     Vector3 normal1 = Vector3.Cross(vTL - vBL, vBR - vBL).normalized;
-                    AddTriangle(vertices, normals, uvs, colors, triangles, ref vertIndex,
-                        vBL, vTL, vBR,
-                        uvBL, uvTL, uvBR,
-                        normal1);
+                    AddTriangle(ref vertIndex, vBL, vTL, vBR, uvBL, uvTL, uvBR, normal1, reallocate);
 
-                    // Triangle 2: TL -> TR -> BR
                     Vector3 normal2 = Vector3.Cross(vTR - vTL, vBR - vTL).normalized;
-                    AddTriangle(vertices, normals, uvs, colors, triangles, ref vertIndex,
-                        vTL, vTR, vBR,
-                        uvTL, uvTR, uvBR,
-                        normal2);
+                    AddTriangle(ref vertIndex, vTL, vTR, vBR, uvTL, uvTR, uvBR, normal2, reallocate);
                 }
             }
 
-            mesh.vertices = vertices;
-            mesh.normals = normals;
-            mesh.uv = uvs;
-            mesh.colors = colors;
-            mesh.triangles = triangles;
+            mesh.vertices = cachedVertices;
+            mesh.normals = cachedNormals;
+            mesh.colors = cachedColors;
+
+            if (reallocate)
+            {
+                mesh.uv = cachedUVs;
+                mesh.triangles = cachedTriangles;
+            }
         }
 
         private void AddTriangle(
-            Vector3[] vertices, Vector3[] normals, Vector2[] uvs, Color[] colors, int[] triangles,
             ref int vertIndex,
             Vector3 v0, Vector3 v1, Vector3 v2,
             Vector2 uv0, Vector2 uv1, Vector2 uv2,
-            Vector3 faceNormal)
+            Vector3 faceNormal,
+            bool setTopology)
         {
             int i0 = vertIndex++;
             int i1 = vertIndex++;
             int i2 = vertIndex++;
 
-            vertices[i0] = v0;
-            vertices[i1] = v1;
-            vertices[i2] = v2;
+            cachedVertices[i0] = v0;
+            cachedVertices[i1] = v1;
+            cachedVertices[i2] = v2;
 
-            normals[i0] = faceNormal;
-            normals[i1] = faceNormal;
-            normals[i2] = faceNormal;
+            cachedNormals[i0] = faceNormal;
+            cachedNormals[i1] = faceNormal;
+            cachedNormals[i2] = faceNormal;
 
-            uvs[i0] = uv0;
-            uvs[i1] = uv1;
-            uvs[i2] = uv2;
+            cachedColors[i0] = CalculateVertexColor(v0, faceNormal);
+            cachedColors[i1] = CalculateVertexColor(v1, faceNormal);
+            cachedColors[i2] = CalculateVertexColor(v2, faceNormal);
 
-            colors[i0] = CalculateVertexColor(v0, faceNormal);
-            colors[i1] = CalculateVertexColor(v1, faceNormal);
-            colors[i2] = CalculateVertexColor(v2, faceNormal);
+            if (setTopology)
+            {
+                cachedUVs[i0] = uv0;
+                cachedUVs[i1] = uv1;
+                cachedUVs[i2] = uv2;
 
-            triangles[i0] = i0;
-            triangles[i1] = i1;
-            triangles[i2] = i2;
+                cachedTriangles[i0] = i0;
+                cachedTriangles[i1] = i1;
+                cachedTriangles[i2] = i2;
+            }
         }
 
         private void GenerateSmoothMesh(Mesh mesh)
@@ -136,10 +150,14 @@ namespace ProceduralTerrain
                 mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             }
 
-            Vector3[] vertices = new Vector3[totalVerts];
-            Vector2[] uvs = new Vector2[totalVerts];
-            Color[] colors = new Color[totalVerts];
-            int[] triangles = new int[(mapSize - 1) * (mapSize - 1) * 6];
+            bool reallocate = (cachedVertices == null || cachedVertices.Length != totalVerts);
+            if (reallocate)
+            {
+                cachedVertices = new Vector3[totalVerts];
+                cachedUVs = new Vector2[totalVerts];
+                cachedColors = new Color[totalVerts];
+                cachedTriangles = new int[(mapSize - 1) * (mapSize - 1) * 6];
+            }
 
             float halfWorld = worldSize * 0.5f;
 
@@ -152,59 +170,63 @@ namespace ProceduralTerrain
                     float wz = y * cellSize - halfWorld;
                     float wy = heightMap[x, y];
 
-                    vertices[index] = new Vector3(wx, wy, wz);
-                    uvs[index] = new Vector2((float)x / (mapSize - 1), (float)y / (mapSize - 1));
+                    cachedVertices[index] = new Vector3(wx, wy, wz);
+                    if (reallocate)
+                    {
+                        cachedUVs[index] = new Vector2((float)x / (mapSize - 1), (float)y / (mapSize - 1));
+                    }
                 }
             }
 
-            int triIndex = 0;
-            for (int y = 0; y < mapSize - 1; y++)
+            if (reallocate)
             {
-                for (int x = 0; x < mapSize - 1; x++)
+                int triIndex = 0;
+                for (int y = 0; y < mapSize - 1; y++)
                 {
-                    int bl = y * mapSize + x;
-                    int br = bl + 1;
-                    int tl = (y + 1) * mapSize + x;
-                    int tr = tl + 1;
+                    for (int x = 0; x < mapSize - 1; x++)
+                    {
+                        int bl = y * mapSize + x;
+                        int br = bl + 1;
+                        int tl = (y + 1) * mapSize + x;
+                        int tr = tl + 1;
 
-                    triangles[triIndex++] = bl;
-                    triangles[triIndex++] = tl;
-                    triangles[triIndex++] = br;
+                        cachedTriangles[triIndex++] = bl;
+                        cachedTriangles[triIndex++] = tl;
+                        cachedTriangles[triIndex++] = br;
 
-                    triangles[triIndex++] = tl;
-                    triangles[triIndex++] = tr;
-                    triangles[triIndex++] = br;
+                        cachedTriangles[triIndex++] = tl;
+                        cachedTriangles[triIndex++] = tr;
+                        cachedTriangles[triIndex++] = br;
+                    }
                 }
+                mesh.triangles = cachedTriangles;
+                mesh.uv = cachedUVs;
             }
 
-            mesh.vertices = vertices;
-            mesh.triangles = triangles;
-            mesh.uv = uvs;
+            mesh.vertices = cachedVertices;
             mesh.RecalculateNormals();
 
             Vector3[] normals = mesh.normals;
             for (int i = 0; i < totalVerts; i++)
             {
-                colors[i] = CalculateVertexColor(vertices[i], normals[i]);
+                cachedColors[i] = CalculateVertexColor(cachedVertices[i], normals[i]);
             }
-            mesh.colors = colors;
+            mesh.colors = cachedColors;
         }
 
         public Color CalculateVertexColor(Vector3 pos, Vector3 normal)
         {
-            // Fairytale Color Palette:
-            Color deepWaterSand = new Color(0.76f, 0.69f, 0.52f); // Golden sand
-            Color beachSand = new Color(0.92f, 0.85f, 0.66f);     // Warm shoreline
-            Color lushGrass = new Color(0.38f, 0.76f, 0.28f);     // Fairytale vibrant green
-            Color meadowGrass = new Color(0.28f, 0.68f, 0.24f);   // Meadow tone
-            Color rockCliff = new Color(0.55f, 0.52f, 0.48f);     // Warm stone
-            Color darkRock = new Color(0.42f, 0.39f, 0.37f);      // Shadowed rock
-            Color snowCap = new Color(0.94f, 0.96f, 1.0f);        // Alpine snow
+            Color deepWaterSand = new Color(0.76f, 0.69f, 0.52f);
+            Color beachSand = new Color(0.92f, 0.85f, 0.66f);
+            Color lushGrass = new Color(0.38f, 0.76f, 0.28f);
+            Color meadowGrass = new Color(0.28f, 0.68f, 0.24f);
+            Color rockCliff = new Color(0.55f, 0.52f, 0.48f);
+            Color darkRock = new Color(0.42f, 0.39f, 0.37f);
+            Color snowCap = new Color(0.94f, 0.96f, 1.0f);
 
             float height = pos.y;
-            float slope = 1.0f - Mathf.Clamp01(normal.y); // 0 = flat ground, 1 = vertical cliff
+            float slope = 1.0f - Mathf.Clamp01(normal.y);
 
-            // Sand / Beach transition
             if (height <= settings.beachHeight)
             {
                 float t = Mathf.InverseLerp(settings.waterLevel - 2.0f, settings.beachHeight, height);
@@ -218,7 +240,6 @@ namespace ProceduralTerrain
                 return sandCol;
             }
 
-            // Mountain Snow Cap
             float snowStart = settings.maxHeight * 0.72f;
             if (height > snowStart && slope < 0.6f)
             {
@@ -227,7 +248,6 @@ namespace ProceduralTerrain
                 return Color.Lerp(baseC, snowCap, snowT);
             }
 
-            // Steep slope -> Rock cliff face
             if (slope > 0.38f)
             {
                 float rockT = Mathf.InverseLerp(0.38f, 0.65f, slope);
@@ -236,7 +256,6 @@ namespace ProceduralTerrain
                 return Color.Lerp(grass, stone, rockT);
             }
 
-            // Lowland to midland meadow with organic height tint
             float midT = Mathf.InverseLerp(settings.beachHeight, settings.maxHeight * 0.6f, height);
             return Color.Lerp(lushGrass, meadowGrass, midT);
         }

@@ -75,6 +75,11 @@ namespace ProceduralTerrain
                         }
                     }
 
+                    if (Input.GetMouseButtonUp(0))
+                    {
+                        worldManager.BakeCollisionMesh();
+                    }
+
                     // Keyboard shortcuts for brush radius ([ and ] or scroll with shift)
                     if (Input.GetKey(KeyCode.LeftShift))
                     {
