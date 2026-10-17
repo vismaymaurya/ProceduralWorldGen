@@ -27,34 +27,40 @@ Welcome to the **Fairytale Procedural Terrain Generation & Sculpting System** fo
 | Action | Input |
 | :--- | :--- |
 | **Paint / Sculpt Terrain** | **Left Click** on the terrain surface |
-| **Switch to Mountain Tool** | Key **1** (Raises land into peaks and rocky cliffs) |
-| **Switch to River Tool** | Key **2** (Sculpts shallow riverbeds and places conformed flowing water; cliffs >50° spawn waterfalls) |
-| **Switch to Plateau Tool** | Key **3** (Flattens and levels terrain to clicked height) |
-| **Switch to Smooth Tool** | Key **4** (Relaxes steep, sharp bumps) |
-| **Switch to Foliage Tool** | Key **5** (Plants fairytale trees on clicked surface) |
-| **Switch to Erase Tool** | Key **6** (Removes trees and foliage within brush radius) |
+| **Invert Raise / Lower Mode** | Hold **Shift** or **Ctrl** while sculpting (instantly inverts between raising peaks and lowering valleys) |
+| **Switch to 1 Raise Tool** | Key **1** (Raises land into peaks and rocky cliffs) |
+| **Switch to 2 Lower Tool** | Key **2** (Lowers land into valleys, canyons, bays, and depressions) |
+| **Switch to 3 River Tool** | Key **3** (Sculpts shallow riverbeds and places conformed flowing water; cliffs >50° spawn waterfalls) |
+| **Switch to 4 Plateau Tool** | Key **4** (Flattens and levels terrain to clicked height) |
+| **Switch to 5 Smooth Tool** | Key **5** (Relaxes steep, sharp bumps) |
+| **Switch to 6 Foliage Tool** | Key **6** (Plants fairytale trees on clicked surface) |
+| **Switch to 7 Erase Tool** | Key **7** (Removes trees and foliage within brush radius) |
 | **Resize Brush Radius** | Keys **[** / **]** or on-screen slider |
 | **Adjust Brush Power** | On-screen **Power** slider |
 | **Randomize New Island** | Press **Spacebar** or click **`🎲 New Island`** |
 | **Toggle UI Visibility** | Press **H** (Hide UI for clean cinematic view or screenshots) |
+
+> [!TIP]
+> **Dynamic Nature & River Conforming:** Whenever you raise or lower terrain height, all nearby trees, rocks, and flowers automatically ride up and down smoothly with the ground! Submerged trees are cleanly removed, and all rivers and cliff waterfalls dynamically re-conform their elevation to the new terrain bed in real time!
 
 ---
 
 ## 3. The On-Screen Docks
 
 ### Active Brush Settings Dock (Above Toolbar)
-- **Tool Display**: Shows currently selected sculpting mode.
+- **Tool Display**: Shows currently selected sculpting mode (Raise Mountain, Lower Valley, River Stream, Plateau, Smooth, Plant Foliage, Erase Foliage).
 - **Size Slider**: Live slider to dynamically adjust brush circle radius (`1.5` to `20.0`).
 - **Power Slider**: Live slider to dynamically adjust brush strength/speed (`0.2` to `3.5`).
 
 ### The Bottom Toolbar
 When running in Play mode, a diorama dock appears at the bottom of the screen:
-- **[1 Mountain]**: Left-click and drag to raise peaks and mountain ranges.
-- **[2 River]**: Left-click and drag down hills to carve a shallow river channel and place flowing water without erasing mountains into an abyss.
-- **[3 Plateau]**: Left-click and drag to level the ground into flat building plateaus.
-- **[4 Smooth]**: Left-click and drag over uneven terrain to smooth the slopes.
-- **[5 Foliage]**: Left-click to plant deciduous, pine, or blossom trees.
-- **[6 Erase]**: Left-click to clear foliage in the brush circle.
+- **[1 Raise]**: Left-click and drag to raise peaks and mountain ranges.
+- **[2 Lower]**: Left-click and drag to carve valleys, gorges, bays, and beaches.
+- **[3 River]**: Left-click and drag down hills to carve a shallow river channel and place flowing water without erasing mountains into an abyss.
+- **[4 Plateau]**: Left-click and drag to level the ground into flat building plateaus.
+- **[5 Smooth]**: Left-click and drag over uneven terrain to smooth the slopes.
+- **[6 Foliage]**: Left-click to plant deciduous, pine, or blossom trees.
+- **[7 Erase]**: Left-click to clear foliage in the brush circle.
 - **[🎲 New Island]**: Instantly rolls a random seed, recreates terrain, rivers, waterfalls, and trees with distinct mountain layouts.
 - **[⚙ Settings]**: Toggles the parameter adjustment sidebar.
 

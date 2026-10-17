@@ -48,5 +48,10 @@
 15. **Resolution of Non-Finite (NaN) Collision Mesh Errors [2026-10-17 21:15:00 +05:30]**:
     - Fixed `Mathf.Pow(nRidge, 1.4f)` producing `NaN` when noise slightly exceeded 1.0, which broke PhysX collision mesh baking, rock positions, and river mesh bounds.
     - Clamped `nRidge` with `Mathf.Clamp01` and added defensive finiteness guards across `ProceduralWorldManager`, `IslandMeshGenerator`, `ProceduralWater`, and `ProceduralFoliage`.
+16. **Lower Terrain Brush & Real-Time Dynamic River & Foliage Adaptation [2026-10-17 21:35:00 +05:30]**:
+    - Added dedicated `LowerTerrain` brush tool ("2 Lower") on bottom diorama toolbar and keyboard shortcut `2`.
+    - Added modifier key support: holding `Shift` or `Ctrl` while in Raise Mountain mode automatically inverts the brush into Lower Terrain (and vice-versa).
+    - Implemented real-time foliage height adaptation: trees, rocks, and flowers smoothly adjust their elevation to follow sculpted terrain up and down in real-time. Submerged props are cleanly destroyed so trees never drown underwater.
+    - Implemented real-time dynamic river & waterfall conforming: river water ribbons and cliff waterfalls dynamically adjust their elevation and flow contours whenever terrain height is modified via brush sculpting or the Terrain Height slider. Rivers never float in mid-air or get buried in rock.
 
 For full documentation and instructions, please see [DailyProgressReport.md](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/DailyProgressReport.md) and [HowToUse.md](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/HowToUse.md).

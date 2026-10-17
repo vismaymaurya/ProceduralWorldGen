@@ -133,7 +133,7 @@ namespace ProceduralTerrain
                 riverPaths.Add(waterSurfacePath);
 
                 // Detect dramatic waterfalls on steep cliffs (> 50-60 degrees slope, drop >= 2.2 units)
-                DetectCliffWaterfalls(waterSurfacePath, waterfalls);
+                DetectCliffWaterfalls(waterSurfacePath, waterfalls, settings);
             }
 
             return waterfalls;
@@ -246,9 +246,9 @@ namespace ProceduralTerrain
             }
         }
 
-        private void DetectCliffWaterfalls(List<Vector3> path, List<WaterfallPoint> waterfalls)
+        public static void DetectCliffWaterfalls(List<Vector3> path, List<WaterfallPoint> waterfalls, TerrainGenerationSettings settings)
         {
-            if (path == null || path.Count < 4) return;
+            if (path == null || path.Count < 4 || settings == null) return;
 
             int waterfallsFound = 0;
             int maxWaterfallsPerRiver = 2; // Only genuine dramatic drops, not everywhere

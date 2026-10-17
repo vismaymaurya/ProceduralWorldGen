@@ -265,7 +265,47 @@ Allocation happened at: Line:261 in ...\Runtime\Graphics\Mesh\VertexData.cpp
 
 ---
 
-## 10. Next Steps
+## 10. Phase 7: Lower Terrain Brush & Real-Time River and Foliage Adaptation
+*Timestamp: 2026-10-17 21:35:00 +05:30*
+
+### 1. User Issues Addressed
+1. **No Tool to Decrease Height of Terrain:**
+   - Previously, the toolbar only had `1 Mountain` (`RaiseMountain`), `2 River`, `3 Plateau`, `4 Smooth`, `5 Foliage`, and `6 Erase`. There was no dedicated tool to depress terrain, sculpt valleys, dig gorges, or lower hills.
+2. **Rivers & Foliage Did Not Adjust to Terrain Elevation Changes:**
+   - When using brush sculpting or moving the Terrain Height slider to raise or lower land, existing trees, rocks, and flowers remained fixed at their initial `y` positions, causing them to either be swallowed inside raised mountains or float suspended in mid-air above lowered ground.
+   - Procedural river ribbons and cliff waterfalls were static, leaving rivers submerged under raised peaks or floating above carved depressions.
+
+### 2. Solutions Implemented & Architecture
+
+1. **Lower Terrain Brush Mode (`LowerTerrain`):**
+   - Added `TerrainBrushMode.LowerTerrain` to [`ProceduralTerrainData.cs`](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/Assets/ProceduralTerrain/Scripts/Core/ProceduralTerrainData.cs).
+   - In [`ProceduralWorldManager.cs`](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/Assets/ProceduralTerrain/Scripts/Core/ProceduralWorldManager.cs) (`ApplyBrush`), implemented continuous depression sculpting:
+     ```csharp
+     case TerrainBrushMode.LowerTerrain:
+         float minSeaFloor = settings.waterLevel - 3.5f;
+         heightMap[x, y] = Mathf.Max(minSeaFloor, heightMap[x, y] - delta);
+         modified = true;
+         break;
+     ```
+     Terrain can be sculpted downward smoothly down to the sea floor, allowing bays, valleys, and gorges without creating infinite void pits.
+   - In [`TerrainBrushTool.cs`](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/Assets/ProceduralTerrain/Scripts/Interaction/TerrainBrushTool.cs), added modifier inversion: holding **`Shift`** or **`Ctrl`** while in `RaiseMountain` mode dynamically inverts the brush to `LowerTerrain` (and vice-versa).
+   - In [`TerrainUIController.cs`](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/Assets/ProceduralTerrain/Scripts/Interaction/TerrainUIController.cs), added the **`2 Lower`** button to the bottom dock, updated toolbar width to 840px, and mapped hotkeys **`1` through `7`**.
+
+2. **Real-Time Foliage Elevation Conforming:**
+   - In [`ProceduralFoliage.cs`](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/Assets/ProceduralTerrain/Scripts/Core/ProceduralFoliage.cs), added `AdjustFoliageHeights(manager, center, radius)` and `AdjustAllFoliageHeights(manager)`.
+   - As the player sculpts with ANY brush tool (Raise, Lower, Plateau, Smooth), foliage objects within the brush radius sample the updated heightmap via bilinear interpolation (`SampleHeightBilinear`) and smoothly glide up or down with the ground surface in real-time.
+   - When ground is lowered beneath sea level (`newY < waterLevel + 0.15f`), trees and flowers are cleanly destroyed, preventing submerged trees from growing underwater.
+
+3. **Dynamic River & Waterfall Height Conforming:**
+   - In [`ProceduralWorldManager.cs`](file:///g:/Unity/Unity%20Project/ProceduralWorldGen/Assets/ProceduralTerrain/Scripts/Core/ProceduralWorldManager.cs), implemented `ReconformRiversToTerrain()` and `IsNearRiver(point, radius)`.
+   - Node elevations across all procedural and user-painted river paths are re-evaluated against the new heightmap (`waterY = bedY + 0.08f`), ensuring water ribbons hug the terrain bed snugly and never float in air or get buried under rock.
+   - Cliff waterfalls are re-detected along the re-conformed river paths using `RiverGenerator.DetectCliffWaterfalls(path, activeWaterfalls, settings)`.
+   - River re-conforming is throttled to 10 updates/sec during brush drag to preserve 60+ FPS, and finalized with 100% precision on mouse release (`GetMouseButtonUp(0)`).
+   - Added `ScaleTerrainHeight(oldMax, newMax)` in `ProceduralWorldManager.cs`: dragging the **Terrain Height** slider in the Settings panel now scales all terrain heights live, adjusting all foliage and re-conforming all rivers across the entire island.
+
+---
+
+## 11. Next Steps
 - Implement procedural roads, pathways, and stone bridges across river channels.
 - Add procedural village building generation that snaps organically to leveled terrain plateaus (houses, churches, windmills, castle towers).
 - Add animated foam particle bursts at waterfall plunge pools.

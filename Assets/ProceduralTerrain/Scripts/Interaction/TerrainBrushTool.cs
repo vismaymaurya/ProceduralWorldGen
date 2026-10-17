@@ -56,34 +56,46 @@ namespace ProceduralTerrain
                 // Verify hit object belongs to terrain
                 if (hit.collider.gameObject == worldManager.gameObject)
                 {
-                    UpdateCursor(hit.point, hit.normal);
+                    // Check if modifier key is held to invert Raise / Lower sculpting
+                    TerrainBrushMode effectiveMode = currentMode;
+                    if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) || Input.GetKey(KeyCode.LeftControl))
+                    {
+                        if (currentMode == TerrainBrushMode.RaiseMountain)
+                            effectiveMode = TerrainBrushMode.LowerTerrain;
+                        else if (currentMode == TerrainBrushMode.LowerTerrain)
+                            effectiveMode = TerrainBrushMode.RaiseMountain;
+                    }
+
+                    UpdateCursor(hit.point, hit.normal, effectiveMode);
 
                     // Left Click Interaction
                     if (Input.GetMouseButton(0))
                     {
-                        if (currentMode == TerrainBrushMode.PaintFoliage)
+                        if (effectiveMode == TerrainBrushMode.PaintFoliage)
                         {
                             if (foliagePlacementCooldown <= 0f)
                             {
-                                worldManager.ApplyBrush(hit.point, brushRadius, brushStrength, currentMode);
+                                worldManager.ApplyBrush(hit.point, brushRadius, brushStrength, effectiveMode);
                                 foliagePlacementCooldown = 0.18f;
                             }
                         }
                         else
                         {
-                            worldManager.ApplyBrush(hit.point, brushRadius, brushStrength, currentMode);
+                            worldManager.ApplyBrush(hit.point, brushRadius, brushStrength, effectiveMode);
                         }
                     }
 
                     if (Input.GetMouseButtonUp(0))
                     {
-                        if (currentMode == TerrainBrushMode.LowerRiver)
+                        if (effectiveMode == TerrainBrushMode.LowerRiver)
                         {
                             worldManager.FinalizeRiverStroke();
                         }
                         else
                         {
                             worldManager.BakeCollisionMesh();
+                            // Ensure rivers and waterfalls adjust snugly to the newly sculpted terrain
+                            worldManager.ReconformRiversToTerrain();
                         }
                     }
 
@@ -128,7 +140,7 @@ namespace ProceduralTerrain
             cursorObject.SetActive(false);
         }
 
-        private void UpdateCursor(Vector3 position, Vector3 normal)
+        private void UpdateCursor(Vector3 position, Vector3 normal, TerrainBrushMode mode)
         {
             if (cursorObject == null) return;
             cursorObject.SetActive(showBrushCursor);
@@ -136,7 +148,7 @@ namespace ProceduralTerrain
             cursorObject.transform.position = position + Vector3.up * 0.12f;
             cursorObject.transform.rotation = Quaternion.FromToRotation(Vector3.up, normal);
 
-            Color brushCol = GetBrushColor(currentMode);
+            Color brushCol = GetBrushColor(mode);
             cursorLine.startColor = brushCol;
             cursorLine.endColor = brushCol;
 
@@ -156,6 +168,8 @@ namespace ProceduralTerrain
             {
                 case TerrainBrushMode.RaiseMountain:
                     return new Color(1.0f, 0.65f, 0.2f, 0.85f); // Warm Orange
+                case TerrainBrushMode.LowerTerrain:
+                    return new Color(0.95f, 0.40f, 0.20f, 0.85f); // Terracotta Amber
                 case TerrainBrushMode.LowerRiver:
                     return new Color(0.2f, 0.75f, 1.0f, 0.85f); // Sky Blue
                 case TerrainBrushMode.FlattenPlateau:

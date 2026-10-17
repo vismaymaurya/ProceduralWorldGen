@@ -51,12 +51,13 @@ namespace ProceduralTerrain
             // Keyboard number shortcuts to switch brush
             if (brushTool != null)
             {
-                if (Input.GetKeyDown(KeyCode.Alpha1)) brushTool.currentMode = TerrainBrushMode.RaiseMountain;
-                if (Input.GetKeyDown(KeyCode.Alpha2)) brushTool.currentMode = TerrainBrushMode.LowerRiver;
-                if (Input.GetKeyDown(KeyCode.Alpha3)) brushTool.currentMode = TerrainBrushMode.FlattenPlateau;
-                if (Input.GetKeyDown(KeyCode.Alpha4)) brushTool.currentMode = TerrainBrushMode.SmoothTerrain;
-                if (Input.GetKeyDown(KeyCode.Alpha5)) brushTool.currentMode = TerrainBrushMode.PaintFoliage;
-                if (Input.GetKeyDown(KeyCode.Alpha6)) brushTool.currentMode = TerrainBrushMode.EraseFoliage;
+                if (Input.GetKeyDown(KeyCode.Alpha1)) { brushTool.currentMode = TerrainBrushMode.RaiseMountain; ShowToast("Tool: Raise Mountain (1)"); }
+                if (Input.GetKeyDown(KeyCode.Alpha2)) { brushTool.currentMode = TerrainBrushMode.LowerTerrain; ShowToast("Tool: Lower Terrain / Valley (2)"); }
+                if (Input.GetKeyDown(KeyCode.Alpha3)) { brushTool.currentMode = TerrainBrushMode.LowerRiver; ShowToast("Tool: River / Stream (3)"); }
+                if (Input.GetKeyDown(KeyCode.Alpha4)) { brushTool.currentMode = TerrainBrushMode.FlattenPlateau; ShowToast("Tool: Flatten Plateau (4)"); }
+                if (Input.GetKeyDown(KeyCode.Alpha5)) { brushTool.currentMode = TerrainBrushMode.SmoothTerrain; ShowToast("Tool: Smooth Terrain (5)"); }
+                if (Input.GetKeyDown(KeyCode.Alpha6)) { brushTool.currentMode = TerrainBrushMode.PaintFoliage; ShowToast("Tool: Plant Foliage (6)"); }
+                if (Input.GetKeyDown(KeyCode.Alpha7)) { brushTool.currentMode = TerrainBrushMode.EraseFoliage; ShowToast("Tool: Erase Foliage (7)"); }
 
                 // [ and ] keys for brush size
                 if (Input.GetKeyDown(KeyCode.LeftBracket))
@@ -215,8 +216,18 @@ namespace ProceduralTerrain
             GUILayout.BeginHorizontal();
             GUILayout.Space(4);
 
-            string modeName = brushTool.currentMode.ToString().Replace("Raise", "").Replace("Lower", "").Replace("Flatten", "").Replace("Smooth", "Smooth ").Replace("Paint", "Paint ").Replace("Erase", "Erase ");
-            GUILayout.Label($"<b>Tool:</b> {modeName}", labelStyle, GUILayout.Width(110));
+            string modeName = brushTool.currentMode switch
+            {
+                TerrainBrushMode.RaiseMountain => "Raise Mountain",
+                TerrainBrushMode.LowerTerrain => "Lower Valley",
+                TerrainBrushMode.LowerRiver => "River Stream",
+                TerrainBrushMode.FlattenPlateau => "Plateau",
+                TerrainBrushMode.SmoothTerrain => "Smooth",
+                TerrainBrushMode.PaintFoliage => "Plant Foliage",
+                TerrainBrushMode.EraseFoliage => "Erase Foliage",
+                _ => brushTool.currentMode.ToString()
+            };
+            GUILayout.Label($"<b>Tool:</b> {modeName}", labelStyle, GUILayout.Width(130));
 
             GUILayout.Label($"Size: {brushTool.brushRadius:F1}", sliderLabelStyle, GUILayout.Width(62));
             brushTool.brushRadius = GUILayout.HorizontalSlider(brushTool.brushRadius, 1.5f, 20.0f, GUILayout.Width(130));
@@ -232,7 +243,7 @@ namespace ProceduralTerrain
         private void DrawBottomToolbar()
         {
             float screenW = Screen.width;
-            float barW = Mathf.Min(740, screenW - 20);
+            float barW = Mathf.Min(840, screenW - 20);
             float barH = 74;
             float x = (screenW - barW) * 0.5f;
             float y = Screen.height - barH - 14;
@@ -245,17 +256,18 @@ namespace ProceduralTerrain
             GUILayout.Space(6);
 
             // Brush Tools
-            DrawBrushButton("1 Mountain", TerrainBrushMode.RaiseMountain, 90);
-            DrawBrushButton("2 River", TerrainBrushMode.LowerRiver, 82);
-            DrawBrushButton("3 Plateau", TerrainBrushMode.FlattenPlateau, 85);
-            DrawBrushButton("4 Smooth", TerrainBrushMode.SmoothTerrain, 80);
-            DrawBrushButton("5 Foliage", TerrainBrushMode.PaintFoliage, 80);
-            DrawBrushButton("6 Erase", TerrainBrushMode.EraseFoliage, 72);
+            DrawBrushButton("1 Raise", TerrainBrushMode.RaiseMountain, 76);
+            DrawBrushButton("2 Lower", TerrainBrushMode.LowerTerrain, 76);
+            DrawBrushButton("3 River", TerrainBrushMode.LowerRiver, 76);
+            DrawBrushButton("4 Plateau", TerrainBrushMode.FlattenPlateau, 80);
+            DrawBrushButton("5 Smooth", TerrainBrushMode.SmoothTerrain, 76);
+            DrawBrushButton("6 Foliage", TerrainBrushMode.PaintFoliage, 76);
+            DrawBrushButton("7 Erase", TerrainBrushMode.EraseFoliage, 70);
 
-            GUILayout.Space(10);
+            GUILayout.Space(8);
 
             // Randomize Seed & Settings
-            if (GUILayout.Button("🎲 New Island", buttonActiveStyle, GUILayout.Width(110), GUILayout.Height(48)))
+            if (GUILayout.Button("🎲 New Island", buttonActiveStyle, GUILayout.Width(104), GUILayout.Height(48)))
             {
                 if (worldManager != null)
                 {
@@ -266,7 +278,7 @@ namespace ProceduralTerrain
             }
 
             string toggleText = showSettingsPanel ? "⚙ Close" : "⚙ Settings";
-            if (GUILayout.Button(toggleText, buttonNormalStyle, GUILayout.Width(78), GUILayout.Height(48)))
+            if (GUILayout.Button(toggleText, buttonNormalStyle, GUILayout.Width(74), GUILayout.Height(48)))
             {
                 showSettingsPanel = !showSettingsPanel;
             }
@@ -345,7 +357,13 @@ namespace ProceduralTerrain
 
             GUILayout.Space(6);
             GUILayout.Label($"Terrain Height: {settings.maxHeight:F0}m", sliderLabelStyle);
-            settings.maxHeight = GUILayout.HorizontalSlider(settings.maxHeight, 10f, 50f);
+            float oldMaxHeight = settings.maxHeight;
+            float newMaxHeight = GUILayout.HorizontalSlider(settings.maxHeight, 10f, 50f);
+            if (Mathf.Abs(newMaxHeight - oldMaxHeight) > 0.15f)
+            {
+                settings.maxHeight = newMaxHeight;
+                worldManager.ScaleTerrainHeight(oldMaxHeight, newMaxHeight);
+            }
 
             GUILayout.Label($"River Depth: {settings.riverDepth:F2} (Shallow Channel)", sliderLabelStyle);
             settings.riverDepth = GUILayout.HorizontalSlider(settings.riverDepth, 0.1f, 1.8f);
@@ -354,7 +372,18 @@ namespace ProceduralTerrain
             settings.riverWidth = GUILayout.HorizontalSlider(settings.riverWidth, 1.5f, 6.0f);
 
             GUILayout.Label($"Water Level: {settings.waterLevel:F1}m", sliderLabelStyle);
-            settings.waterLevel = GUILayout.HorizontalSlider(settings.waterLevel, 1.5f, 7.0f);
+            float oldWaterLevel = settings.waterLevel;
+            float newWaterLevel = GUILayout.HorizontalSlider(settings.waterLevel, 1.5f, 7.0f);
+            if (Mathf.Abs(newWaterLevel - oldWaterLevel) > 0.05f)
+            {
+                settings.waterLevel = newWaterLevel;
+                worldManager.RebuildMesh();
+                if (worldManager.FoliageController != null)
+                {
+                    worldManager.FoliageController.AdjustAllFoliageHeights(worldManager);
+                }
+                worldManager.ReconformRiversToTerrain();
+            }
 
             GUILayout.Label($"River Count: {settings.riverCount}", sliderLabelStyle);
             settings.riverCount = Mathf.RoundToInt(GUILayout.HorizontalSlider(settings.riverCount, 0, 6));

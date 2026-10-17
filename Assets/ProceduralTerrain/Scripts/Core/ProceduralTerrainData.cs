@@ -57,6 +57,7 @@ namespace ProceduralTerrain
     public enum TerrainBrushMode
     {
         RaiseMountain,
+        LowerTerrain,
         LowerRiver,
         FlattenPlateau,
         SmoothTerrain,

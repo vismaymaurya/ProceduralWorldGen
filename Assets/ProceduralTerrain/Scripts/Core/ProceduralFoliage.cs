@@ -203,6 +203,83 @@ namespace ProceduralTerrain
             }
         }
 
+        /// <summary>
+        /// Dynamically adjusts elevation of foliage within brush radius to match newly sculpted terrain height.
+        /// Destroys trees/flowers if lowered beneath the sea level.
+        /// </summary>
+        public void AdjustFoliageHeights(ProceduralWorldManager manager, Vector3 center, float radius)
+        {
+            if (manager == null || spawnedFoliage == null || spawnedFoliage.Count == 0) return;
+
+            float checkRadius = radius + 2.0f;
+            float sqrR = checkRadius * checkRadius;
+            float waterLevel = manager.settings.waterLevel;
+
+            for (int i = spawnedFoliage.Count - 1; i >= 0; i--)
+            {
+                var f = spawnedFoliage[i];
+                if (f == null)
+                {
+                    spawnedFoliage.RemoveAt(i);
+                    continue;
+                }
+
+                Vector3 pos = f.transform.position;
+                float dx = pos.x - center.x;
+                float dz = pos.z - center.z;
+
+                if (dx * dx + dz * dz <= sqrR)
+                {
+                    float newY = manager.SampleHeightBilinear(pos.x, pos.z);
+                    if (float.IsNaN(newY) || float.IsInfinity(newY)) continue;
+
+                    bool isRock = f.name.Contains("Rock");
+                    if (!isRock && newY < waterLevel + 0.15f)
+                    {
+                        SafeDestroyGO(f);
+                        spawnedFoliage.RemoveAt(i);
+                        continue;
+                    }
+
+                    f.transform.position = new Vector3(pos.x, newY, pos.z);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Dynamically adjusts elevation of all foliage across the entire world (e.g. when scaling terrain height).
+        /// </summary>
+        public void AdjustAllFoliageHeights(ProceduralWorldManager manager)
+        {
+            if (manager == null || spawnedFoliage == null || spawnedFoliage.Count == 0) return;
+
+            float waterLevel = manager.settings.waterLevel;
+
+            for (int i = spawnedFoliage.Count - 1; i >= 0; i--)
+            {
+                var f = spawnedFoliage[i];
+                if (f == null)
+                {
+                    spawnedFoliage.RemoveAt(i);
+                    continue;
+                }
+
+                Vector3 pos = f.transform.position;
+                float newY = manager.SampleHeightBilinear(pos.x, pos.z);
+                if (float.IsNaN(newY) || float.IsInfinity(newY)) continue;
+
+                bool isRock = f.name.Contains("Rock");
+                if (!isRock && newY < waterLevel + 0.15f)
+                {
+                    SafeDestroyGO(f);
+                    spawnedFoliage.RemoveAt(i);
+                    continue;
+                }
+
+                f.transform.position = new Vector3(pos.x, newY, pos.z);
+            }
+        }
+
         public void ClearFoliage()
         {
             if (foliageRoot != null)

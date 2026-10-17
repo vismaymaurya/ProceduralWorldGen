@@ -35,11 +35,14 @@ namespace ProceduralTerrain
         private List<List<Vector3>> activeRiverPaths = new List<List<Vector3>>();
         private List<List<Vector3>> customRiverPaths = new List<List<Vector3>>();
         private List<Vector3> activeRiverStroke = new List<Vector3>();
+        private float lastRiverReconformTime = 0f;
 
         public float[,] HeightMap => heightMap;
         public Mesh CurrentTerrainMesh => currentTerrainMesh;
         public List<WaterfallPoint> ActiveWaterfalls => activeWaterfalls;
         public List<List<Vector3>> CustomRiverPaths => customRiverPaths;
+        public ProceduralFoliage FoliageController => foliageController;
+        public ProceduralWater WaterController => waterController;
 
         private void Awake()
         {
@@ -352,6 +355,13 @@ namespace ProceduralTerrain
                             modified = true;
                             break;
 
+                        case TerrainBrushMode.LowerTerrain:
+                            // Lower terrain height down towards sea floor without creating infinite void pits
+                            float minSeaFloor = settings.waterLevel - 3.5f;
+                            heightMap[x, y] = Mathf.Max(minSeaFloor, heightMap[x, y] - delta);
+                            modified = true;
+                            break;
+
                         case TerrainBrushMode.LowerRiver:
                             // River brush records stroke points and avoids continuous erasure during drag.
                             // A shallow, gentle channel indentation (max 0.25 units) is applied on stroke completion.
@@ -380,6 +390,22 @@ namespace ProceduralTerrain
             {
                 // In-place mesh vertex/color update without reallocating native mesh
                 UpdateTerrainMeshVisualsOnly();
+
+                // 1. Real-time foliage height adaptation (trees and props smoothly ride terrain up/down)
+                if (foliageController != null)
+                {
+                    foliageController.AdjustFoliageHeights(this, hitPoint, radius);
+                }
+
+                // 2. Real-time river height adaptation (throttled during brush drag to preserve 60+ FPS)
+                if (IsNearRiver(hitPoint, radius))
+                {
+                    if (Time.time - lastRiverReconformTime > 0.10f)
+                    {
+                        lastRiverReconformTime = Time.time;
+                        ReconformRiversToTerrain();
+                    }
+                }
             }
 
             // Foliage brush actions
@@ -613,6 +639,121 @@ namespace ProceduralTerrain
         {
             UpdateTerrainMeshVisualsOnly();
             BakeCollisionMesh();
+        }
+
+        /// <summary>
+        /// Checks whether a world point is within proximity to any active or custom river path.
+        /// </summary>
+        public bool IsNearRiver(Vector3 point, float radius)
+        {
+            float checkR = radius + (settings != null ? settings.riverWidth : 3.0f);
+            float sqrR = checkR * checkR;
+            List<List<Vector3>> allPaths = GetAllRiverPaths();
+            for (int p = 0; p < allPaths.Count; p++)
+            {
+                List<Vector3> path = allPaths[p];
+                if (path == null) continue;
+                for (int i = 0; i < path.Count; i++)
+                {
+                    float dx = path[i].x - point.x;
+                    float dz = path[i].z - point.z;
+                    if (dx * dx + dz * dz <= sqrR) return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Dynamically re-conforms all river water ribbons and cliff waterfalls to the current heightmap.
+        /// Water ribbons hug the modified riverbeds snugly and never float in air or get buried.
+        /// </summary>
+        public void ReconformRiversToTerrain()
+        {
+            if (waterController == null || heightMap == null) return;
+
+            // 1. Re-evaluate active and custom river paths against new terrain surface
+            ReconformPathList(activeRiverPaths);
+            ReconformPathList(customRiverPaths);
+
+            // 2. Re-detect cliff waterfalls along modified paths
+            activeWaterfalls.Clear();
+            if (activeRiverPaths != null)
+            {
+                foreach (var path in activeRiverPaths)
+                {
+                    RiverGenerator.DetectCliffWaterfalls(path, activeWaterfalls, settings);
+                }
+            }
+            if (customRiverPaths != null)
+            {
+                foreach (var path in customRiverPaths)
+                {
+                    RiverGenerator.DetectCliffWaterfalls(path, activeWaterfalls, settings);
+                }
+            }
+
+            // 3. Rebuild river and waterfall meshes
+            waterController.BuildWater(settings, activeWaterfalls, GetAllRiverPaths());
+        }
+
+        private void ReconformPathList(List<List<Vector3>> paths)
+        {
+            if (paths == null) return;
+            for (int p = 0; p < paths.Count; p++)
+            {
+                List<Vector3> path = paths[p];
+                if (path == null || path.Count == 0) continue;
+
+                float prevY = float.MaxValue;
+                for (int i = 0; i < path.Count; i++)
+                {
+                    Vector3 pt = path[i];
+                    float bedY = SampleHeightBilinear(pt.x, pt.z);
+                    float waterY = bedY + 0.08f;
+                    waterY = Mathf.Max(settings.waterLevel + 0.02f, waterY);
+
+                    if (i > 0)
+                    {
+                        waterY = Mathf.Max(bedY + 0.04f, Mathf.Min(prevY - 0.005f, bedY + 0.12f));
+                        waterY = Mathf.Max(settings.waterLevel + 0.02f, waterY);
+                    }
+                    prevY = waterY;
+                    path[i] = new Vector3(pt.x, waterY, pt.z);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Proportionally scales all terrain heights above sea level when the Terrain Height slider is adjusted.
+        /// Automatically adjusts all foliage and reconforms all rivers to the new height contours.
+        /// </summary>
+        public void ScaleTerrainHeight(float oldMax, float newMax)
+        {
+            if (heightMap == null || oldMax <= 0.01f || Mathf.Approximately(oldMax, newMax)) return;
+
+            float ratio = newMax / oldMax;
+            int size = settings.mapSize;
+            float water = settings.waterLevel;
+
+            for (int x = 0; x < size; x++)
+            {
+                for (int y = 0; y < size; y++)
+                {
+                    if (heightMap[x, y] > water)
+                    {
+                        heightMap[x, y] = water + (heightMap[x, y] - water) * ratio;
+                    }
+                }
+            }
+
+            RebuildMesh();
+
+            if (foliageController != null)
+            {
+                foliageController.AdjustAllFoliageHeights(this);
+            }
+
+            ReconformRiversToTerrain();
         }
     }
 }
